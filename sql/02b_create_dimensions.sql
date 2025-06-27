@@ -1,5 +1,5 @@
 -- ===========================
--- DIMENSION TABLES
+-- DIMENSION TABLES (Based on Original + Environmental Conditions)
 -- ===========================
 
 -- Time Dimension
@@ -78,8 +78,15 @@ CREATE TABLE dwh.dim_weather (
 -- Create indexes for better performance
 CREATE INDEX idx_venue_city ON dwh.dim_venue(city_name);
 CREATE INDEX idx_venue_country ON dwh.dim_venue(country_name);
+CREATE INDEX idx_venue_altitude ON dwh.dim_venue(altitude_category);
 CREATE INDEX idx_event_name ON dwh.dim_event(event_name);
+CREATE INDEX idx_event_group ON dwh.dim_event(event_group);
 CREATE INDEX idx_athlete_name ON dwh.dim_athlete(athlete_name);
+CREATE INDEX idx_athlete_nationality ON dwh.dim_athlete(nationality);
 CREATE INDEX idx_date_year ON dwh.dim_date(year);
+CREATE INDEX idx_date_season ON dwh.dim_date(season);
+CREATE INDEX idx_competition_level ON dwh.dim_competition(competition_level);
+CREATE INDEX idx_weather_temp_category ON dwh.dim_weather(temperature_category);
 
 COMMENT ON SCHEMA dwh IS 'Data Warehouse schema for athletics performance analysis';
+COMMENT ON TABLE dwh.dim_weather IS 'Environmental conditions dimension for climate impact analysis';

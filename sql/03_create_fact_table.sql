@@ -1,9 +1,7 @@
--- ===========================
--- FACT TABLE
--- ===========================
+-- FACT TABLE (Performance Analysis with Environmental Context)
 
 CREATE TABLE dwh.fact_performance (
-    performance_key SERIAL PRIMARY KEY,
+    performance_id SERIAL PRIMARY KEY,
     
     -- Foreign Keys
     athlete_key INT REFERENCES dwh.dim_athlete(athlete_key),
@@ -11,41 +9,43 @@ CREATE TABLE dwh.fact_performance (
     venue_key INT REFERENCES dwh.dim_venue(venue_key),
     date_key INT REFERENCES dwh.dim_date(date_key),
     competition_key INT REFERENCES dwh.dim_competition(competition_key),
-    weather_key INT REFERENCES dwh.dim_weather(weather_key),
+    weather_key INT REFERENCES dwh.dim_weather(weather_key), -- NEW
     
-    -- Measures
-    result_value DECIMAL(10,3), -- time in seconds or distance in meters
-    wind_reading DECIMAL(4,2), -- wind speed if available
-    position_finish INT, -- finishing position
-    performance_score DECIMAL(8,2), -- standardized performance score (0-1000)
-    altitude_adjusted_result DECIMAL(10,3), -- performance adjusted for altitude
+    -- Performance Measures
+    result_value DECIMAL(10,3),
+    performance_score DECIMAL(10,3), -- Standardized 0-1000 score
+    altitude_adjusted_result DECIMAL(10,3), -- Environmental adjustment
+    rank_position INT,
+    wind_reading DECIMAL(4,2),
     
-    -- Performance Indicators
-    is_championship_performance BOOLEAN,
-    is_personal_best BOOLEAN,
-    is_season_best BOOLEAN,
-    is_world_record BOOLEAN,
-    is_national_record BOOLEAN,
+    -- Performance Context
+    is_personal_best BOOLEAN DEFAULT FALSE,
+    is_season_best BOOLEAN DEFAULT FALSE,
+    is_championship_performance BOOLEAN DEFAULT FALSE,
+    
+    -- Environmental Impact Measures
+    temperature_impact_factor DECIMAL(5,3), -- Estimated temperature effect
+    performance_advantage DECIMAL(8,3),     -- vs venue average
+    environmental_bonus DECIMAL(8,3),       -- estimated improvement due to conditions
     
     -- Data Quality
-    data_source VARCHAR(30), -- 'WorldAthletics'
-    data_quality_score INT, -- 1-10 reliability score
-    has_wind_data BOOLEAN,
-    
-    -- Metadata
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    load_batch_id INT
+    data_quality_score INT,
+    source_system VARCHAR(50),
+    load_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Performance Indexes for OLAP queries
-CREATE INDEX idx_fact_athlete_event ON dwh.fact_performance(athlete_key, event_key);
-CREATE INDEX idx_fact_venue_date ON dwh.fact_performance(venue_key, date_key);
+-- Fact table indexes
+CREATE INDEX idx_fact_athlete ON dwh.fact_performance(athlete_key);
+CREATE INDEX idx_fact_event ON dwh.fact_performance(event_key);
+CREATE INDEX idx_fact_venue ON dwh.fact_performance(venue_key);
+CREATE INDEX idx_fact_date ON dwh.fact_performance(date_key);
+CREATE INDEX idx_fact_competition ON dwh.fact_performance(competition_key);
+CREATE INDEX idx_fact_weather ON dwh.fact_performance(weather_key);
 CREATE INDEX idx_fact_performance_score ON dwh.fact_performance(performance_score);
-CREATE INDEX idx_fact_competition_level ON dwh.fact_performance(competition_key);
-CREATE INDEX idx_fact_result_value ON dwh.fact_performance(result_value);
+CREATE INDEX idx_fact_is_championship ON dwh.fact_performance(is_championship_performance);
 
 -- Composite indexes for common queries
-CREATE INDEX idx_fact_env_analysis ON dwh.fact_performance(venue_key, weather_key, event_key);
-CREATE INDEX idx_fact_time_analysis ON dwh.fact_performance(date_key, competition_key);
+CREATE INDEX idx_fact_event_venue ON dwh.fact_performance(event_key, venue_key);
+CREATE INDEX idx_fact_athlete_event ON dwh.fact_performance(athlete_key, event_key);
 
-COMMENT ON TABLE dwh.fact_performance IS 'Central fact table containing athletic performance measurements';
+COMMENT ON TABLE dwh.fact_performance IS 'Athletic performances with environmental context - Grain: One performance per athlete/event/venue/date/competition';
