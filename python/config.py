@@ -26,25 +26,26 @@ CONNECTION_STRING = f"postgresql://{DB_CONFIG['username']}:{DB_CONFIG['password'
 # Data quality thresholds
 DATA_QUALITY = {
     'min_result_value': 0.1,
-    'max_result_value': 50000,  # seconds for longest events, meters for throws
+    'max_result_value': 50000,
     'valid_genders': ['M', 'F', 'Men', 'Women'],
-    'min_year': 1990,
-    'max_year': 2024
+    'min_year': 1935,
+    'max_year': 2023   
 }
 
 # Event categorization mapping
 EVENT_CATEGORIES = {
-    'Sprint': ['100m', '200m', '400m', '60m', '110m Hurdles', '100m Hurdles', '400m Hurdles'],
-    'Distance': ['800m', '1500m', '5000m', '10000m', 'Marathon', '3000m Steeplechase'],
+    'Sprint': ['100m', '200m', '400m'],
+    'Distance': ['800m', '1500m', '5000m', '10000m', 'Marathon'],
+    'Hurdles': ['100m Hurdles', '110m Hurdles', '400m Hurdles'],
     'Jumps': ['Long Jump', 'High Jump', 'Triple Jump', 'Pole Vault'],
     'Throws': ['Shot Put', 'Discus Throw', 'Hammer Throw', 'Javelin Throw']
 }
 
 # Competition level mapping
 COMPETITION_LEVELS = {
-    'Elite': ['World Championships', 'Olympic Games', 'Diamond League'],
-    'Professional': ['Continental Championships', 'National Championships', 'World Challenge'],
-    'Amateur': ['Regional Championships', 'University Championships', 'Club Championships']
+    'Elite': ['World Championships', 'Olympics', 'Diamond League'],
+    'Professional': ['Continental Championships', 'National Championships'],
+    'Amateur': ['Regional', 'Local']
 }
 
 # Altitude categories (meters)
@@ -63,5 +64,3 @@ TEMPERATURE_CATEGORIES = {
     'Warm': (24, 30),
     'Hot': (30, 50)
 }
-
-print("Configuration loaded successfully!")
