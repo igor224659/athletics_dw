@@ -144,6 +144,7 @@ def clean_world_athletics_data(engine):
         
         # Add computed columns
         df_clean['competition_level'] = 'Professional'  # Default value
+        df_clean['data_source'] = 'World_Athletics'
         
         logger.info(f"Final columns: {list(df_clean.columns)}")
         logger.info(f"Final column count: {len(df_clean.columns)}")
@@ -388,6 +389,8 @@ def integrate_temperature_data(engine):
                 return 'Hot'
         
         monthly_avg['temperature_category'] = monthly_avg['AvgTemperature'].apply(categorize_temperature)
+
+        monthly_avg['data_source'] = 'City_Temperature'
         
         # Save cleaned temperature data
         #with engine.connect() as conn:

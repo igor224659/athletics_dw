@@ -1,6 +1,4 @@
-"""
-Configuration file for Athletics Data Warehouse Project
-"""
+"""Configuration file for Athletics Data Warehouse Project"""
 
 import os
 
