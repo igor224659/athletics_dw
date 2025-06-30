@@ -314,8 +314,12 @@ def integrate_geographic_data(engine):
             'city_name': cities_df['City'].str.strip().str.upper(),
             'country_name': cities_df['Country'].str.strip().str.upper(),
             'latitude': cities_df['Latitude'],   
-            'longitude': cities_df['Longitude']  
+            'longitude': cities_df['Longitude'],
+            'population': cities_df['Population']
         })
+
+        # Handle missing values
+#         cities_df['Population'] = cities_df['Population'].fillna(0) 
         
         # Calculate altitude categories from latitude
         def categorize_altitude(lat):

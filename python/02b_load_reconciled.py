@@ -140,115 +140,6 @@ def reconcile_events(engine):
 
 
 
-def reconcile_venues(engine):
-    logger.info("Reconciling venues...")
-
-    # Step 1: Get unique venues (fast)
-    venues_query = """
-    SELECT DISTINCT venue_name
-    FROM staging.clean_world_athletics
-    WHERE venue_name IS NOT NULL
-    """
-    
-    with engine.connect() as conn:
-        df = pd.read_sql(text(venues_query), conn)
-
-    logger.info(f"Processing {len(df)} unique venues...")
-
-    # Step 2: Extract city/country from venue names (fast Python parsing)
-    location_info = df['venue_name'].apply(extract_location_from_venue)
-    
-    df['city_extracted'] = [info['city'] for info in location_info]
-    df['country_extracted'] = [info['country'] for info in location_info]
-    df['country_code'] = [info['country_code'] for info in location_info]
-
-    # Clean extracted city names for matching
-    df['city_extracted_clean'] = df['city_extracted'].str.strip().str.upper()
-
-    # Step 3: Get cities data for matching (one-time read)
-    cities_query = """
-    SELECT DISTINCT 
-        city_name,
-        country_name, 
-        latitude,
-        longitude
-    FROM staging.clean_cities
-    WHERE city_name IS NOT NULL
-    """
-    
-    with engine.connect() as conn:
-        cities_df = pd.read_sql(text(cities_query), conn)
-    
-    # Prepare cities data for matching
-    cities_df['city_name_clean'] = cities_df['city_name'].str.strip().str.upper()
-
-    logger.info(f"Matching against {len(cities_df)} cities...")
-
-    # Step 4: Join venues with cities (much smaller join - ~1000 venues vs 3.2M cities)
-    merged_df = df.merge(
-        cities_df, 
-        left_on='city_extracted_clean', 
-        right_on='city_name_clean', 
-        how='left'
-    )
-
-    # Step 5: Build final venue data with real geographic attributes
-    merged_df['venue_name_clean'] = merged_df['venue_name'].str.strip().str.title()
-    
-    # Use matched city data or extracted data as fallback
-    merged_df['city_name'] = merged_df['city_name'].fillna(merged_df['city_extracted'])
-    merged_df['country_name'] = merged_df['country_name'].fillna(merged_df['country_extracted'])
-    
-    # Geographic attributes from cities database
-    merged_df['latitude'] = merged_df['latitude'].fillna(0.0)
-    merged_df['longitude'] = merged_df['longitude'].fillna(0.0)
-
-    # Calculate altitude from latitude (your existing function)
-    def estimate_altitude(lat):
-        if pd.isna(lat) or lat == 0.0: 
-            return 100
-        return max(0, int(abs(lat) * 50))
-
-    def categorize_altitude_from_value(alt):
-        if alt > 1500:
-            return 'High'
-        elif alt > 500:
-            return 'Moderate'
-        else:
-            return 'Sea Level'
-
-    merged_df['altitude'] = merged_df['latitude'].apply(estimate_altitude)
-    merged_df['altitude_category'] = merged_df['altitude'].apply(categorize_altitude_from_value)
-    
-    # Other attributes
-    merged_df['continent'] = 'Unknown'  # Could be enhanced based on country
-    merged_df['city_size'] = 'Unknown'
-    merged_df['population'] = 0
-    merged_df['data_quality_score'] = merged_df.apply(
-        lambda row: 8 if not pd.isna(row['latitude']) and row['latitude'] != 0 else 6, axis=1
-    )
-    merged_df['geographic_source'] = 'Venue_Parsing_Plus_Cities_DB'
-
-    # Select final columns
-    final = merged_df[['venue_name', 'venue_name_clean', 'city_name', 'country_name', 'country_code',
-                       'latitude', 'longitude', 'altitude', 'altitude_category',
-                       'continent', 'city_size', 'population',
-                       'data_quality_score', 'geographic_source']]
-
-    with engine.connect() as conn:
-        final.to_sql('venues', conn, schema='reconciled', if_exists='append', index=False)
-        conn.commit()
-    
-    logger.info(f"Inserted {len(final)} venues with geographic data.")
-    
-    # Show match success rate
-    matched_count = len(final[final['latitude'] != 0.0])
-    logger.info(f"Successfully matched {matched_count}/{len(final)} venues to geographic data")
-    
-    return final
-
-
-
 def reconcile_weather(engine):
     logger.info("Reconciling weather conditions...")
 
@@ -326,6 +217,154 @@ def reconcile_competitions(engine):
 
 
 
+# def reconcile_venues(engine):
+#     """Create reconciled venue dimension with stadium-to-city soft matching"""
+#     logger.info("Reconciling venue data with soft city matching...")
+
+#     query = """
+#     WITH filtered_cities AS (
+#         SELECT * 
+#         FROM staging.clean_cities 
+#         WHERE population > 20000
+#     )
+#     SELECT DISTINCT 
+#         a.venue_name,
+#         c.city_name,
+#         c.country_name,
+#         c.latitude,
+#         c.longitude,
+#         c.population,
+#         c.altitude_category,
+#         c.data_source
+#     FROM staging.clean_world_athletics a
+#     LEFT JOIN filtered_cities c 
+#         ON LOWER(a.venue_name) LIKE '%' || LOWER(c.city_name) || '%'
+#     WHERE a.venue_name IS NOT NULL
+#     """
+
+#     with engine.connect() as conn:
+#         venues_df = pd.read_sql(text(query), conn)
+
+#     # Clean and enrich
+#     venues_df['venue_name_clean'] = venues_df['venue_name'].str.strip().str.title()
+#     venues_df['city_name'] = venues_df['city_name'].fillna('Unknown')
+#     venues_df['country_name'] = venues_df['country_name'].fillna('Unknown')
+
+#     # Deduplicate: prefer match with valid latitude
+#     venues_df['lat_score'] = venues_df['latitude'].apply(lambda x: 1 if pd.notna(x) and x != 0 else 0)
+#     venues_df = venues_df.sort_values(by='lat_score', ascending=False)
+#     venues_df = venues_df.drop_duplicates(subset='venue_name_clean', keep='first')
+#     venues_df.drop(columns='lat_score', inplace=True)
+
+#     # Altitude & climate
+#     def estimate_altitude(lat):
+#         if pd.isna(lat): return 100
+#         return max(0, int(abs(lat) * 50))
+
+#     def determine_climate(lat):
+#         if pd.isna(lat): return 'Unknown'
+#         abs_lat = abs(lat)
+#         if abs_lat < 23.5: return 'Tropical'
+#         elif abs_lat < 40: return 'Subtropical'
+#         elif abs_lat < 60: return 'Temperate'
+#         else: return 'Polar'
+
+#     venues_df['altitude'] = venues_df['latitude'].apply(estimate_altitude)
+#     venues_df['altitude_category'] = venues_df['altitude'].apply(
+#         lambda x: 'High' if x > 1500 else 'Moderate' if x > 500 else 'Sea Level'
+#     )
+#     venues_df['climate_zone'] = venues_df['latitude'].apply(determine_climate)
+#     venues_df['data_quality_score'] = venues_df['latitude'].apply(lambda lat: 8 if lat else 6)
+#     venues_df['geographic_source'] = 'Stadium-to-City LIKE Match'
+
+#     # Save to reconciled layer
+#     with engine.connect() as conn:
+#         venues_df.to_sql('venues', conn, schema='reconciled', if_exists='replace', index=False)
+#         conn.commit()
+    
+#     logger.info(f"Reconciled {len(venues_df)} venues with best available geographic match")
+
+#     return venues_df
+
+
+
+def reconcile_venues(engine):
+    logger.info("Reconciling venues with improved city matching...")
+    
+    # Step 1: Get venues and extract cities using Python (FAST)
+    venues_query = """
+    SELECT DISTINCT venue_name
+    FROM staging.clean_world_athletics
+    WHERE venue_name IS NOT NULL
+    """
+    
+    with engine.connect() as conn:
+        venues_df = pd.read_sql(text(venues_query), conn)
+    
+    # Step 2: Extract city names
+    location_info = venues_df['venue_name'].apply(extract_location_from_venue)
+    venues_df['city_extracted'] = [info['city'] for info in location_info]
+    venues_df['country_extracted'] = [info['country'] for info in location_info]
+    
+    # Step 3: Get filtered cities (FAST)
+    cities_query = """
+    SELECT city_name, country_name, latitude, longitude, population, altitude_category
+    FROM staging.clean_cities
+    
+    """
+    
+    with engine.connect() as conn:
+        cities_df = pd.read_sql(text(cities_query), conn)
+    
+    # Step 4: Exact matching on extracted city names (FAST)
+    cities_df['city_upper'] = cities_df['city_name'].str.upper()
+    venues_df['city_upper'] = venues_df['city_extracted'].str.upper()
+    
+    merged_df = venues_df.merge(cities_df, on='city_upper', how='left')
+    
+    # Step 5: Your excellent deduplication logic
+    merged_df['venue_name_clean'] = merged_df['venue_name'].str.strip().str.title()
+    merged_df['lat_score'] = merged_df['latitude'].apply(lambda x: 1 if pd.notna(x) and x != 0 else 0)
+    merged_df = merged_df.sort_values(by='lat_score', ascending=False)
+    merged_df = merged_df.drop_duplicates(subset='venue_name_clean', keep='first')
+
+    # Altitude & climate
+    def estimate_altitude(lat):
+        if pd.isna(lat): return 100
+        return max(0, int(abs(lat) * 50))
+
+    def determine_climate(lat):
+        if pd.isna(lat): return 'Unknown'
+        abs_lat = abs(lat)
+        if abs_lat < 23.5: return 'Tropical'
+        elif abs_lat < 40: return 'Subtropical'
+        elif abs_lat < 60: return 'Temperate'
+        else: return 'Polar'
+
+    merged_df['altitude'] = merged_df['latitude'].apply(estimate_altitude)
+    merged_df['altitude_category'] = merged_df['altitude'].apply(
+        lambda x: 'High' if x > 1500 else 'Moderate' if x > 500 else 'Sea Level'
+    )
+    merged_df['climate_zone'] = merged_df['latitude'].apply(determine_climate)
+    merged_df['data_quality_score'] = merged_df['latitude'].apply(lambda lat: 8 if lat else 6)
+    merged_df['geographic_source'] = 'Stadium-to-City Match'
+
+
+    # Keep only specific columns
+    merged_df = merged_df[['venue_name_clean', 'city_upper', 'country_extracted', 'latitude', 'longitude', 'altitude', 'altitude_category', 'climate_zone', 'population',
+                           'data_quality_score', 'geographic_source']]
+
+    # Save to reconciled layer
+    with engine.connect() as conn:
+        merged_df.to_sql('venues', conn, schema='reconciled', if_exists='replace', index=False)
+        conn.commit()
+    
+    logger.info(f"Reconciled {len(merged_df)} venues with best available geographic match")
+
+    return merged_df
+
+
+
 def reconcile_performances(engine):
     logger.info("Reconciling performances...")
 
@@ -349,57 +388,104 @@ def reconcile_performances(engine):
     with engine.connect() as conn:
         df = pd.read_sql(text(query), conn)
 
-    # Date processing
-    df['month'] = pd.to_datetime(df['competition_date'], errors='coerce').dt.month
+    logger.info(f"STEP 1 - Original performance data: {len(df)} records")
+
+    # Extract month from performance date for weather matching
+    df['competition_date_parsed'] = pd.to_datetime(df['competition_date'], errors='coerce')
+    df['month'] = df['competition_date_parsed'].dt.month
     df['month_name'] = df['month'].apply(lambda x: calendar.month_name[int(x)] if not pd.isna(x) else 'Unknown')
+    
+    # Clean names for matching
     df['athlete_name_clean'] = df['athlete_name'].str.strip().str.title()
     df['event_name_clean'] = df['event_name']
     df['venue_name_clean'] = df['venue_name'].str.strip().str.title()
 
+    # Read reference tables
     with engine.connect() as conn:
         athletes = pd.read_sql(text("SELECT athlete_id, athlete_name_clean FROM reconciled.athletes"), conn)
         events = pd.read_sql(text("SELECT event_id, event_name_standardized FROM reconciled.events"), conn)
         venues = pd.read_sql(text("SELECT venue_id, venue_name_clean, city_name FROM reconciled.venues"), conn)
-        weather = pd.read_sql(text("SELECT weather_id, venue_name, month_name FROM reconciled.weather_conditions"), conn)
+        weather = pd.read_sql(text("SELECT weather_id, venue_name as city_name, month_name FROM reconciled.weather_conditions"), conn)
 
     logger.info(f"Reference table counts - Athletes: {len(athletes)}, Events: {len(events)}, Venues: {len(venues)}")
 
+    # Step-by-step joins with diagnostics
     df = df.merge(athletes, on='athlete_name_clean', how='left')
+    logger.info(f"STEP 2 - After athlete join: {len(df)} records")
+
     df = df.merge(events, left_on='event_name_clean', right_on='event_name_standardized', how='left')
-    df = df.merge(venues, on='venue_name_clean', how='left')
-    
-    # Weather matching - use venue city if available
-    df = df.merge(weather, left_on=['venue_name', 'month_name'], right_on=['venue_name', 'month_name'], how='left')
+    logger.info(f"STEP 3 - After event join: {len(df)} records")
+
+
+    # Before venue join, deduplicate venues by name (keep first)
+    venues_dedup = venues.drop_duplicates(subset=['venue_name_clean'], keep='first')
+    logger.info(f"Venues after deduplication: {len(venues_dedup)} (was {len(venues)})")
+    # Use deduplicated venues for join
+    df = df.merge(venues_dedup, on='venue_name_clean', how='left')
+    logger.info(f"STEP 4 - After venue join: {len(df)} records")
+
+
+    # FIXED WEATHER JOIN: Match city from venue + month from performance date
+    df = df.merge(weather, on=['city_name', 'month_name'], how='left')
+    logger.info(f"STEP 5 - After weather join: {len(df)} records")
     
     # Assign all performances to the single default competition
     df['competition_id'] = 1
 
-    # Data quality checks
+    # Data quality filtering
     logger.info(f"Before filtering: {len(df)} records")
-    
-    # Keep records with essential IDs
-    df = df.dropna(subset=['athlete_id', 'event_id', 'competition_id'])
-    logger.info(f"After requiring athlete/event/competition IDs: {len(df)} records")
+    df = df.dropna(subset=['athlete_id', 'event_id'])
+    logger.info(f"After requiring athlete/event IDs: {len(df)} records")
     
     # Fill missing foreign keys with default values
     df['venue_id'] = df['venue_id'].fillna(1)  # Default venue
     df['weather_id'] = df['weather_id'].fillna(1)  # Default weather
     df['data_quality_score'] = 8
 
-    # Fix 6: Select final columns
+    # Select final columns
     final = df[['athlete_id', 'event_id', 'venue_id', 'weather_id', 'competition_id',
                 'competition_date', 'result_value', 'wind_reading', 'position_finish',
                 'data_source', 'data_quality_score']]
 
-    logger.info(f"Final performance records: {len(final)}")
+    # Convert data types
+    final['athlete_id'] = final['athlete_id'].astype(int)
+    final['event_id'] = final['event_id'].astype(int) 
+    final['venue_id'] = final['venue_id'].astype(int)
+    final['weather_id'] = final['weather_id'].astype(int)
+    final['competition_id'] = final['competition_id'].astype(int)
 
-    # Fix 7: Proper save with SQLAlchemy 2.0
-    with engine.connect() as conn:
-        final.to_sql('performances', conn, schema='reconciled', if_exists='append', index=False)
-        conn.commit()
+    logger.info(f"Final performance records ready for insert: {len(final)}")
+    logger.info(f"Weather match success: {(final['weather_id'] != 1).sum()}/{len(final)} performances have weather data")
+
+    # Use chunked save for large dataset
+    logger.info("Starting chunked save of performance data...")
+    chunked_save_to_postgres(final, 'performances', engine, schema='reconciled', chunk_size=25000)
     
     logger.info(f"Inserted {len(final)} performances.")
     return final
+
+
+
+def chunked_save_to_postgres(df, table_name, engine, schema='reconciled', chunk_size=25000):
+    """Save large DataFrame in chunks"""
+    logger.info(f"Saving {len(df)} records to {schema}.{table_name} in chunks of {chunk_size}...")
+    
+    total_chunks = len(df) // chunk_size + 1
+    
+    for i, chunk_start in enumerate(range(0, len(df), chunk_size)):
+        chunk_end = min(chunk_start + chunk_size, len(df))
+        chunk = df.iloc[chunk_start:chunk_end]
+        
+        logger.info(f"Saving chunk {i+1}/{total_chunks} ({chunk_start}:{chunk_end})")
+        
+        if_exists_param = 'replace' if i == 0 else 'append'
+        
+        with engine.connect() as conn:
+            chunk.to_sql(table_name, conn, schema=schema, 
+                        if_exists=if_exists_param, index=False, method='multi')
+            conn.commit()
+    
+    logger.info(f"✓ {table_name} saved successfully")
 
 
 
