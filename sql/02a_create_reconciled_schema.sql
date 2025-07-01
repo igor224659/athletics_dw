@@ -81,11 +81,12 @@ CREATE TABLE reconciled.performances (
     athlete_id INT REFERENCES reconciled.athletes(athlete_id),
     event_id INT REFERENCES reconciled.events(event_id),
     venue_id INT REFERENCES reconciled.venues(venue_id),
+    weather_id INT REFERENCES reconciled.weather_conditions(weather_id),
     competition_id INT REFERENCES reconciled.competitions(competition_id),
     competition_date DATE,
     result_value DECIMAL(10,3),
     wind_reading DECIMAL(4,2),
-    position_finish INT,
+    position_finish VARCHAR(50),
     data_source VARCHAR(50),
     data_quality_score INT,
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP

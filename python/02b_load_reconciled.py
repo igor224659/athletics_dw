@@ -1,3 +1,4 @@
+import io
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine, text
@@ -382,11 +383,13 @@ def reconcile_performances(engine):
     df['venue_id'] = df['venue_id'].fillna(1)  # Default venue
     df['weather_id'] = df['weather_id'].fillna(1)  # Default weather
     df['data_quality_score'] = 8
+    # Add created_date column to match SQL table structure
+    df['created_date'] = pd.Timestamp.now()
 
     # Select final columns
     final = df[['athlete_id', 'event_id', 'venue_id', 'weather_id', 'competition_id',
                 'competition_date', 'result_value', 'wind_reading', 'position_finish',
-                'data_source', 'data_quality_score']]
+                'data_source', 'data_quality_score', 'created_date']]
 
     # Convert data types
     final['athlete_id'] = final['athlete_id'].astype(int)
@@ -398,36 +401,62 @@ def reconcile_performances(engine):
     logger.info(f"Final performance records ready for insert: {len(final)}")
     logger.info(f"Weather match success: {(final['weather_id'] != 1).sum()}/{len(final)} performances have weather data")
 
-    # Use chunked save for large dataset
-    logger.info("Starting chunked save of performance data...")
-    chunked_save_to_postgres(final, 'performances', engine, schema='reconciled', chunk_size=25000)
+    #Use TRUNCATE + chunked append to preserve table structure
+    with engine.connect() as conn:
+        # Clear existing data but keep table structure
+        conn.execute(text("TRUNCATE TABLE reconciled.performances RESTART IDENTITY"))
+        conn.commit()
+        logger.info("Cleared existing performance data")
+    
+    # Use modified chunked save that only appends
+    logger.info("Starting save of performance data...")
+    ultra_fast_postgres_append(final, 'performances', engine)
+    #chunked_append_to_postgres(final, 'performances', engine, schema='reconciled', chunk_size=1000)
     
     logger.info(f"Inserted {len(final)} performances.")
     return final
 
 
 
-
-def chunked_save_to_postgres(df, table_name, engine, schema='reconciled', chunk_size=25000):
-    """Save large DataFrame in chunks"""
-    logger.info(f"Saving {len(df)} records to {schema}.{table_name} in chunks of {chunk_size}...")
+def ultra_fast_postgres_append(df, table_name, engine, schema='reconciled'):
+    """Ultra-fast append using PostgreSQL COPY - no table recreation"""
+    logger.info(f"Ultra-fast appending {len(df)} records to {schema}.{table_name}...")
     
-    total_chunks = len(df) // chunk_size + 1
+    # Step 1: Verify table exists
+    with engine.connect() as conn:
+        try:
+            result = conn.execute(text(f"SELECT COUNT(*) FROM {schema}.{table_name} LIMIT 1"))
+            logger.info(f"Table {schema}.{table_name} exists and is accessible")
+        except Exception as e:
+            logger.error(f"Cannot access table {schema}.{table_name}: {e}")
+            raise
     
-    for i, chunk_start in enumerate(range(0, len(df), chunk_size)):
-        chunk_end = min(chunk_start + chunk_size, len(df))
-        chunk = df.iloc[chunk_start:chunk_end]
-        
-        logger.info(f"Saving chunk {i+1}/{total_chunks} ({chunk_start}:{chunk_end})")
-        
-        if_exists_param = 'replace' if i == 0 else 'append'
-        
-        with engine.connect() as conn:
-            chunk.to_sql(table_name, conn, schema=schema, 
-                        if_exists=if_exists_param, index=False, method='multi')
-            conn.commit()
+    # Step 2: Prepare data for COPY
+    output = io.StringIO()
     
-    logger.info(f"✓ {table_name} saved successfully")
+    # Convert DataFrame to tab-separated values
+    df.to_csv(output, sep='\t', header=False, index=False, na_rep='\\N', 
+              date_format='%Y-%m-%d', float_format='%.6f')
+    output.seek(0)
+    
+    # Step 3: Use PostgreSQL COPY command with proper connection handling
+    with engine.begin() as conn:  # Use begin() for transaction
+        raw_conn = conn.connection.dbapi_connection
+        cursor = raw_conn.cursor()
+        
+        try:
+            # COPY command - use fully qualified table name
+            copy_sql = f"COPY {schema}.{table_name} ({','.join(df.columns)}) FROM STDIN WITH (FORMAT text, DELIMITER E'\\t', NULL '\\N')"
+            
+            logger.info(f"Executing COPY command for {schema}.{table_name}")
+            cursor.copy_expert(copy_sql, output)
+            
+            logger.info(f"{len(df)} records appended successfully using COPY!")
+            
+        except Exception as e:
+            logger.error(f"COPY failed: {e}")
+            logger.error(f"Attempted COPY command: {copy_sql}")
+            raise
 
 
 
@@ -437,6 +466,42 @@ def extract_location_from_venue(venue_name):     ### for Reconciled_venues
         return {'city': 'Unknown', 'country': 'Unknown', 'country_code': 'UNK'}
     
     venue_str = str(venue_name).strip()
+
+    # Handle pattern: "Stadium Name, City (Country)"
+    # Example: "Stadio Olimpico, Roma (ITA)"
+    if ',' in venue_str and '(' in venue_str:
+        parts = venue_str.split(',')
+        if len(parts) >= 2:
+            # Get city part (after comma, before parentheses)
+            city_part = parts[1].strip()
+            
+            # Extract city name (remove country in parentheses)
+            if '(' in city_part:
+                city = city_part[:city_part.find('(')].strip()
+                
+                # Extract country from parentheses
+                country_start = venue_str.find('(')
+                country_end = venue_str.find(')')
+                if country_start != -1 and country_end != -1:
+                    country = venue_str[country_start+1:country_end].strip()
+                else:
+                    country = 'Unknown'
+            else:
+                city = city_part
+                country = 'Unknown'
+                
+            return {'city': city.upper(), 'country': country.upper(), 'country_code': country.upper()[:3]}
+    
+    # Handle pattern: "City (Country)" - no stadium name
+    # Example: "Rieti (ITA)"
+    elif '(' in venue_str and ')' in venue_str and ',' not in venue_str:
+        city_part = venue_str[:venue_str.find('(')].strip()
+        
+        country_start = venue_str.find('(')
+        country_end = venue_str.find(')')
+        country = venue_str[country_start+1:country_end].strip()
+        
+        return {'city': city_part.upper(), 'country': country.upper(), 'country_code': country.upper()[:3]}
     
     # Handle pattern: "Venue Name, City, State (Country)"
     # Example: "Hayward Field, Eugene, OR (USA)"
