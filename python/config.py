@@ -14,7 +14,7 @@ DB_CONFIG = {
 # Data File Paths
 DATA_PATHS = {
     'world_athletics': 'data/raw/world_athletics_database.csv',
-    'cities': 'data/raw/worldcities.csv',
+    'cities': 'data/raw/cities1000.csv',
     'temperature': 'data/raw/city_temperature.csv'
 }
 

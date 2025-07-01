@@ -44,7 +44,7 @@ CREATE TABLE reconciled.venues (
     altitude INT,
     altitude_category VARCHAR(20),
     continent VARCHAR(30),
-    city_size VARCHAR(20),
+    climate_zone VARCHAR(30),
     population INT,
     data_quality_score INT,
     geographic_source VARCHAR(50),

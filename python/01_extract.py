@@ -2,7 +2,7 @@
 
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from config import CONNECTION_STRING, DATA_PATHS
 import logging
 
@@ -19,6 +19,7 @@ def create_db_connection():
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         raise
+
 
 def extract_world_athletics_data():
     """Load World Athletics Database"""
@@ -46,20 +47,61 @@ def extract_world_athletics_data():
         logger.error(f"Failed to load World Athletics data: {e}")
         raise
 
+
+# def extract_cities_data():
+#     """Load World Cities Database"""
+#     try:
+#         logger.info("Loading World Cities Database...")
+#         df = pd.read_csv(DATA_PATHS['cities'])
+#         logger.info(f"Cities Database loaded: {len(df)} records")
+        
+#         # Display basic info
+#         logger.info(f"Countries: {df['country'].nunique() if 'country' in df.columns else 'No country column'}")
+        
+#         return df
+#     except Exception as e:
+#         logger.error(f"Failed to load Cities data: {e}")
+#         raise
+
 def extract_cities_data():
-    """Load World Cities Database"""
+    """Load GeoNames Cities Database with Elevation"""
     try:
-        logger.info("Loading World Cities Database...")
-        df = pd.read_csv(DATA_PATHS['cities'])
-        logger.info(f"Cities Database loaded: {len(df)} records")
+        logger.info("Loading GeoNames Cities Database...")
         
-        # Display basic info
-        logger.info(f"Countries: {df['country'].nunique() if 'country' in df.columns else 'No country column'}")
+        # Define the column names for GeoNames format
+        geonames_columns = [
+            'geonameid', 'name', 'asciiname', 'alternatenames', 
+            'latitude', 'longitude', 'feature_class', 'feature_code',
+            'country_code', 'cc2', 'admin1_code', 'admin2_code', 
+            'admin3_code', 'admin4_code', 'population', 'dem', 'elevation', 
+            'continent', 'modification_date'
+        ]
         
-        return df
+        # Read the CSV with proper column names
+        df = pd.read_csv(DATA_PATHS['cities'], names=geonames_columns, encoding='latin-1')
+        
+        # Select only needed columns
+        cities_df = df[['name', 'country_code', 'latitude', 'longitude', 'population', 'elevation']].copy()
+        
+        # Rename to match expected structure
+        cities_df = cities_df.rename(columns={
+            'name': 'City',
+            'country_code': 'Country',
+            'latitude': 'Latitude', 
+            'longitude': 'Longitude',
+            'population': 'Population',
+            'elevation': 'Altitude' 
+        })
+        
+        logger.info(f"GeoNames Database loaded: {len(cities_df)} records")
+        logger.info(f"Cities with elevation data: {cities_df['Altitude'].notna().sum()}")
+        
+        return cities_df
+        
     except Exception as e:
-        logger.error(f"Failed to load Cities data: {e}")
+        logger.error(f"Failed to load GeoNames data: {e}")
         raise
+
 
 def extract_temperature_data():
     """Load City Temperature Data"""
@@ -76,6 +118,7 @@ def extract_temperature_data():
         logger.error(f"Failed to load Temperature data: {e}")
         raise
 
+
 def load_to_staging(engine, world_athletics_df, cities_df, temperature_df):
     """Load raw data to staging tables with optimized performance"""
     try:
@@ -90,11 +133,10 @@ def load_to_staging(engine, world_athletics_df, cities_df, temperature_df):
             if_exists='replace', 
             index=False, 
             method='multi',
-            chunksize=10000  # Process 10K rows at a time
+            chunksize=10000
         )
         logger.info("✓ World Athletics data loaded")
         
-        # Method 2: For very large datasets, use even bigger chunks
         logger.info(f"Loading Cities data ({len(cities_df)} rows)...")
         cities_df.to_sql(
             'raw_cities', 
@@ -103,7 +145,7 @@ def load_to_staging(engine, world_athletics_df, cities_df, temperature_df):
             if_exists='replace', 
             index=False, 
             method='multi',
-            chunksize=25000  # Bigger chunks for large dataset
+            chunksize=25000  
         )
         logger.info("✓ Cities data loaded")
         
@@ -115,15 +157,15 @@ def load_to_staging(engine, world_athletics_df, cities_df, temperature_df):
             if_exists='replace', 
             index=False, 
             method='multi',
-            chunksize=20000
+            chunksize=25000
         )
         logger.info("✓ Temperature data loaded")
         
         # Verify data loading
         with engine.connect() as conn:
-            athletics_count = conn.execute("SELECT COUNT(*) FROM staging.raw_world_athletics").scalar()
-            cities_count = conn.execute("SELECT COUNT(*) FROM staging.raw_cities").scalar()
-            temp_count = conn.execute("SELECT COUNT(*) FROM staging.raw_temperature").scalar()
+            athletics_count = conn.execute(text("SELECT COUNT(*) FROM staging.raw_world_athletics")).scalar()
+            cities_count = conn.execute(text("SELECT COUNT(*) FROM staging.raw_cities")).scalar()
+            temp_count = conn.execute(text("SELECT COUNT(*) FROM staging.raw_temperature")).scalar()
             
         logger.info(f"Data verification - Athletics: {athletics_count}, Cities: {cities_count}, Temperature: {temp_count}")
         

@@ -6,6 +6,7 @@ import numpy as np
 from sqlalchemy import create_engine, text
 from config import CONNECTION_STRING, EVENT_CATEGORIES, COMPETITION_LEVELS, DATA_QUALITY
 import logging
+import unicodedata
 import re
 
 # Setup logging
@@ -254,49 +255,54 @@ def standardize_event_names(df):
 
 
 
-# def integrate_geographic_data(engine):
-#     """Integrate and clean geographic data"""
-#     try:
-#         logger.info("Integrating geographic data...")
-        
-#         with engine.connect() as conn:
-#             cities_df = pd.read_sql(text("SELECT * FROM staging.raw_cities"), conn)
-        
-#         # String cleaning
-#         logger.info("Cleaning city and country names (3.2M records)...")
-#         cities_df['city_clean'] = cities_df['City'].str.strip().str.upper()   
-#         cities_df['country_clean'] = cities_df['Country'].str.strip().str.upper() 
-        
-#         # Handle missing values
-#         cities_df['Population'] = cities_df['Population'].fillna(0)  
-        
-#         # Altitude categorization
-#         def categorize_altitude(lat):
-#             if pd.isna(lat):
-#                 return 'Unknown'
-#             if abs(lat) < 30:
-#                 return 'Sea Level'
-#             elif abs(lat) < 50:
-#                 return 'Moderate'
-#             else:
-#                 return 'High'
-        
-#         logger.info("Calculating altitude categories...")
-#         cities_df['altitude_category'] = cities_df['Latitude'].apply(categorize_altitude)  
-        
-#         # Save cleaned geographic data
-#         logger.info("Saving geographic data...")
-#         #with engine.connect() as conn:
-#         #    cities_df.to_sql('clean_cities', conn, schema='staging', 
-#         #                    if_exists='replace', index=False, method='multi')
-#         chunked_save_to_postgres(cities_df, 'clean_cities', engine)
+def clean_city_names(city_name):
+    """Clean weird characters and normalize city names"""
+    if pd.isna(city_name):
+        return 'Unknown'
+    
+    city_str = str(city_name)
+    
+    # Remove or replace problematic characters
+    city_str = city_str.replace('Ã¡', 'a')  # á
+    city_str = city_str.replace('Ã©', 'e')  # é  
+    city_str = city_str.replace('Ã­', 'i')  # í
+    city_str = city_str.replace('Ã³', 'o')  # ó
+    city_str = city_str.replace('Ãº', 'u')  # ú
+    city_str = city_str.replace('Ã±', 'n')  # ñ
+    city_str = city_str.replace('Ã§', 'c')  # ç
+    city_str = city_str.replace('Ã¼', 'u')  # ü
+    city_str = city_str.replace('Ã¶', 'o')  # ö
+    city_str = city_str.replace('Ã¤', 'a')  # ä
+    
+    # Remove any remaining weird characters
+    city_str = re.sub(r'[^\w\s\-\.]', '', city_str)
+    
+    # Normalize unicode and convert to ASCII
+    try:
+        normalized = unicodedata.normalize('NFD', city_str)
+        ascii_version = normalized.encode('ascii', 'ignore').decode('ascii')
+        return ascii_version.strip().title()
+    except:
+        return city_str.strip().title()
 
-#         logger.info(f"Geographic data integrated: {len(cities_df)} cities")
-#         return cities_df
-        
-#     except Exception as e:
-#         logger.error(f"Failed to integrate geographic data: {e}")
-#         raise
+def safe_float_convert(value):
+    """Safely convert string to float"""
+    if pd.isna(value):
+        return None
+    try:
+        return float(str(value).strip())
+    except (ValueError, TypeError):
+        return None
+
+def safe_int_convert(value):
+    """Safely convert string to integer"""
+    if pd.isna(value):
+        return 0
+    try:
+        return int(float(str(value).strip()))
+    except (ValueError, TypeError):
+        return 0
+
 
 def integrate_geographic_data(engine):
     """Integrate and clean geographic data"""
@@ -308,35 +314,53 @@ def integrate_geographic_data(engine):
         
         logger.info(f"Original cities data: {len(cities_df)} records")
         logger.info(f"Original columns: {list(cities_df.columns)}")
-        
-        # CREATE CLEAN DATAFRAME WITH ONLY NEEDED COLUMNS
-        cities_clean = pd.DataFrame({
-            'city_name': cities_df['City'].str.strip().str.upper(),
-            'country_name': cities_df['Country'].str.strip().str.upper(),
-            'latitude': cities_df['Latitude'],   
-            'longitude': cities_df['Longitude'],
-            'population': cities_df['Population']
-        })
 
-        # Handle missing values
-#         cities_df['Population'] = cities_df['Population'].fillna(0) 
+        # STEP 1: Clean city names and characters
+        cities_df['City_Clean'] = cities_df['City'].apply(clean_city_names)
+        cities_df['Country_Clean'] = cities_df['Country'].apply(clean_city_names)
         
-        # Calculate altitude categories from latitude
-        def categorize_altitude(lat):
-            if pd.isna(lat):
+        # STEP 2: Convert string coordinates to numbers
+        cities_df['Latitude_Num'] = cities_df['Latitude'].apply(safe_float_convert)
+        cities_df['Longitude_Num'] = cities_df['Longitude'].apply(safe_float_convert)
+        cities_df['Population_Num'] = cities_df['Population'].apply(safe_int_convert)
+        cities_df['Altitude_Num'] = cities_df['Altitude'].apply(safe_float_convert)
+        
+        # STEP 3: Filter out invalid coordinates
+        valid_coords = (
+            cities_df['Latitude_Num'].notna() & 
+            cities_df['Longitude_Num'].notna() &
+            (cities_df['Latitude_Num'].between(-90, 90)) &
+            (cities_df['Longitude_Num'].between(-180, 180))
+        )
+        
+        # STEP 4: Create final clean dataset
+        cities_clean = pd.DataFrame({
+            'city_name': cities_df['City_Clean'].str.upper(),
+            'country_name': cities_df['Country_Clean'].str.upper(),
+            'latitude': cities_df['Latitude_Num'],   
+            'longitude': cities_df['Longitude_Num'],
+            'altitude': cities_df['Altitude_Num'].fillna(100)  # Use real elevation or default
+        })
+        
+        # Keep only valid coordinates
+        cities_clean = cities_clean[valid_coords].copy()
+        
+        # STEP 5: Remove duplicates
+        cities_clean = cities_clean.drop_duplicates(subset=['city_name', 'country_name'], keep='first')
+        
+        # STEP 6: Calculate altitude categories with real data
+        def categorize_real_altitude(alt):
+            if pd.isna(alt) or alt <= 0:
                 return 'Unknown'
-            if abs(lat) < 30:
-                return 'Sea Level'
-            elif abs(lat) < 50:
+            if alt > 1500:
+                return 'High'
+            elif alt > 500:
                 return 'Moderate'
             else:
-                return 'High'
+                return 'Sea Level'
         
-        logger.info("Calculating altitude categories...")
-        cities_clean['altitude_category'] = cities_clean['latitude'].apply(categorize_altitude)
-        
-        # Add data source
-        cities_clean['data_source'] = 'WorldCities'
+        cities_clean['altitude_category'] = cities_clean['altitude'].apply(categorize_real_altitude)
+        cities_clean['data_source'] = 'GeoNames_Cleaned'
         
         logger.info(f"Clean cities columns: {list(cities_clean.columns)}")
         logger.info(f"Clean cities count: {len(cities_clean)}")

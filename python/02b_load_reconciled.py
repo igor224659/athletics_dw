@@ -217,81 +217,10 @@ def reconcile_competitions(engine):
 
 
 
-# def reconcile_venues(engine):
-#     """Create reconciled venue dimension with stadium-to-city soft matching"""
-#     logger.info("Reconciling venue data with soft city matching...")
-
-#     query = """
-#     WITH filtered_cities AS (
-#         SELECT * 
-#         FROM staging.clean_cities 
-#         WHERE population > 20000
-#     )
-#     SELECT DISTINCT 
-#         a.venue_name,
-#         c.city_name,
-#         c.country_name,
-#         c.latitude,
-#         c.longitude,
-#         c.population,
-#         c.altitude_category,
-#         c.data_source
-#     FROM staging.clean_world_athletics a
-#     LEFT JOIN filtered_cities c 
-#         ON LOWER(a.venue_name) LIKE '%' || LOWER(c.city_name) || '%'
-#     WHERE a.venue_name IS NOT NULL
-#     """
-
-#     with engine.connect() as conn:
-#         venues_df = pd.read_sql(text(query), conn)
-
-#     # Clean and enrich
-#     venues_df['venue_name_clean'] = venues_df['venue_name'].str.strip().str.title()
-#     venues_df['city_name'] = venues_df['city_name'].fillna('Unknown')
-#     venues_df['country_name'] = venues_df['country_name'].fillna('Unknown')
-
-#     # Deduplicate: prefer match with valid latitude
-#     venues_df['lat_score'] = venues_df['latitude'].apply(lambda x: 1 if pd.notna(x) and x != 0 else 0)
-#     venues_df = venues_df.sort_values(by='lat_score', ascending=False)
-#     venues_df = venues_df.drop_duplicates(subset='venue_name_clean', keep='first')
-#     venues_df.drop(columns='lat_score', inplace=True)
-
-#     # Altitude & climate
-#     def estimate_altitude(lat):
-#         if pd.isna(lat): return 100
-#         return max(0, int(abs(lat) * 50))
-
-#     def determine_climate(lat):
-#         if pd.isna(lat): return 'Unknown'
-#         abs_lat = abs(lat)
-#         if abs_lat < 23.5: return 'Tropical'
-#         elif abs_lat < 40: return 'Subtropical'
-#         elif abs_lat < 60: return 'Temperate'
-#         else: return 'Polar'
-
-#     venues_df['altitude'] = venues_df['latitude'].apply(estimate_altitude)
-#     venues_df['altitude_category'] = venues_df['altitude'].apply(
-#         lambda x: 'High' if x > 1500 else 'Moderate' if x > 500 else 'Sea Level'
-#     )
-#     venues_df['climate_zone'] = venues_df['latitude'].apply(determine_climate)
-#     venues_df['data_quality_score'] = venues_df['latitude'].apply(lambda lat: 8 if lat else 6)
-#     venues_df['geographic_source'] = 'Stadium-to-City LIKE Match'
-
-#     # Save to reconciled layer
-#     with engine.connect() as conn:
-#         venues_df.to_sql('venues', conn, schema='reconciled', if_exists='replace', index=False)
-#         conn.commit()
-    
-#     logger.info(f"Reconciled {len(venues_df)} venues with best available geographic match")
-
-#     return venues_df
-
-
-
 def reconcile_venues(engine):
-    logger.info("Reconciling venues with improved city matching...")
+    logger.info("Reconciling venues...")
     
-    # Step 1: Get venues and extract cities using Python (FAST)
+    # Get venues and extract cities using Python
     venues_query = """
     SELECT DISTINCT venue_name
     FROM staging.clean_world_athletics
@@ -301,38 +230,44 @@ def reconcile_venues(engine):
     with engine.connect() as conn:
         venues_df = pd.read_sql(text(venues_query), conn)
     
-    # Step 2: Extract city names
+    # Extract city names
     location_info = venues_df['venue_name'].apply(extract_location_from_venue)
     venues_df['city_extracted'] = [info['city'] for info in location_info]
     venues_df['country_extracted'] = [info['country'] for info in location_info]
     
-    # Step 3: Get filtered cities (FAST)
+    # Get filtered cities
     cities_query = """
-    SELECT city_name, country_name, latitude, longitude, population, altitude_category
+    SELECT city_name, country_name, latitude, longitude, altitude, altitude_category
     FROM staging.clean_cities
-    
+    WHERE altitude IS NOT NULL
     """
     
     with engine.connect() as conn:
         cities_df = pd.read_sql(text(cities_query), conn)
     
-    # Step 4: Exact matching on extracted city names (FAST)
-    cities_df['city_upper'] = cities_df['city_name'].str.upper()
-    venues_df['city_upper'] = venues_df['city_extracted'].str.upper()
+    # Prepare for matching
+    venues_df['city_extracted_clean'] = venues_df['city_extracted'].str.strip().str.upper()
+    venues_df['country_extracted_clean'] = venues_df['country_extracted'].str.strip().str.upper()
     
-    merged_df = venues_df.merge(cities_df, on='city_upper', how='left')
+    # Match venues to cities
+    merged_df = venues_df.merge(
+        cities_df, 
+        left_on=['city_extracted_clean', 'country_extracted_clean'], 
+        right_on=['city_name', 'country_name'], 
+        how='left'
+    )
     
-    # Step 5: Your excellent deduplication logic
+    # Create clean venue data
     merged_df['venue_name_clean'] = merged_df['venue_name'].str.strip().str.title()
-    merged_df['lat_score'] = merged_df['latitude'].apply(lambda x: 1 if pd.notna(x) and x != 0 else 0)
-    merged_df = merged_df.sort_values(by='lat_score', ascending=False)
+    merged_df['city_name'] = merged_df['city_name'].fillna(merged_df['city_extracted']).str.title()
+    merged_df['country_name'] = merged_df['country_name'].fillna(merged_df['country_extracted']).str.upper()
     merged_df = merged_df.drop_duplicates(subset='venue_name_clean', keep='first')
 
-    # Altitude & climate
-    def estimate_altitude(lat):
-        if pd.isna(lat): return 100
-        return max(0, int(abs(lat) * 50))
+    # Handle missing data with defaults
+    #merged_df['altitude'] = merged_df['altitude'].fillna(100)  # Default for unmatched venues
+    #merged_df['altitude_category'] = merged_df['altitude_category'].fillna('Sea Level') 
 
+    # Climate categorization
     def determine_climate(lat):
         if pd.isna(lat): return 'Unknown'
         abs_lat = abs(lat)
@@ -341,22 +276,28 @@ def reconcile_venues(engine):
         elif abs_lat < 60: return 'Temperate'
         else: return 'Polar'
 
-    merged_df['altitude'] = merged_df['latitude'].apply(estimate_altitude)
-    merged_df['altitude_category'] = merged_df['altitude'].apply(
-        lambda x: 'High' if x > 1500 else 'Moderate' if x > 500 else 'Sea Level'
-    )
+    #merged_df['latitude'] = merged_df['latitude'].fillna(0.0)
+    #merged_df['longitude'] = merged_df['longitude'].fillna(0.0)
     merged_df['climate_zone'] = merged_df['latitude'].apply(determine_climate)
-    merged_df['data_quality_score'] = merged_df['latitude'].apply(lambda lat: 8 if lat else 6)
-    merged_df['geographic_source'] = 'Stadium-to-City Match'
+    merged_df['geographic_source'] = 'Venue_Parsing_Plus_GeoNames_Elevation'
 
+    # Data quality scoring
+    merged_df['data_quality_score'] = merged_df.apply(
+        lambda row: 9 if (pd.notna(row['latitude']) and row['latitude'] != 0 and pd.notna(row['altitude']) and row['altitude'] > 0) 
+                   else 7 if (pd.notna(row['latitude']) and row['latitude'] != 0)
+                   else 5, axis=1
+    )
 
-    # Keep only specific columns
-    merged_df = merged_df[['venue_name_clean', 'city_upper', 'country_extracted', 'latitude', 'longitude', 'altitude', 'altitude_category', 'climate_zone', 'population',
-                           'data_quality_score', 'geographic_source']]
+    # Select final columns
+    final_venues = merged_df[[
+        'venue_name', 'venue_name_clean', 'city_name', 'country_name',
+        'latitude', 'longitude', 'altitude', 'altitude_category', 
+        'climate_zone', 'data_quality_score', 'geographic_source'
+    ]]
 
     # Save to reconciled layer
     with engine.connect() as conn:
-        merged_df.to_sql('venues', conn, schema='reconciled', if_exists='replace', index=False)
+        final_venues.to_sql('venues', conn, schema='reconciled', if_exists='append', index=False)
         conn.commit()
     
     logger.info(f"Reconciled {len(merged_df)} venues with best available geographic match")
@@ -463,6 +404,7 @@ def reconcile_performances(engine):
     
     logger.info(f"Inserted {len(final)} performances.")
     return final
+
 
 
 
