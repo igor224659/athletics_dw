@@ -85,37 +85,138 @@ def reconcile_events(engine):
             return 'Hurdles'
         elif 'jump' in e:
             return 'Jumps'
-        elif 'throw' in e or 'put' in e:
+        elif 'throw' in e or 'put' in e or 'vault' in e:
             return 'Throws'
         # Check distances AFTER hurdles
-        elif any(x in e for x in ['100m', '200m', '400m', '60m']):
+        elif any(x in e for x in ['100 metres', '200 metres', '300 metres', '400 metres', '60 metres']):
             return 'Sprint'
-        elif any(x in e for x in ['800m', '1500m', '5000m', '10000m', 'marathon']):
+        elif any(x in e for x in ['kilometres race walk', 'kilometres']):
+            return 'Distance (Road)'
+        elif any(x in e for x in ['600', '800', '1000', '1500', '2000', '3000', '5000', '10000', 'marathon', 'mile', 'metres race walk']):
             return 'Distance'
         else:
             return 'Other'
 
     def extract_distance(event):
+        """
+        Extract distance in meters from event name, handling various formats
+        """
+        if not event:
+            return None
+        
         import re
-        match = re.search(r'(\d+)(?=m)', event.lower())
-        return int(match.group(1)) if match else None
+        event_lower = event.lower()
+        
+        # Word-to-number mapping for written distances
+        word_to_number = {
+            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+            'half': 0.5
+        }
+        
+        # 1. Handle Mile distances (convert to meters)
+        mile_patterns = [
+            r'(\d+(?:\.\d+)?)\s*mile',  # "1.5 mile", "1 mile"
+            r'(one|two|three|four|five|half)\s+mile',  # "One Mile", "Half Mile"
+            r'(\d+)\s*mi\b'  # "1 mi"
+        ]
+        
+        for pattern in mile_patterns:
+            match = re.search(pattern, event_lower)
+            if match:
+                distance_str = match.group(1)
+                if distance_str in word_to_number:
+                    distance_miles = word_to_number[distance_str]
+                else:
+                    try:
+                        distance_miles = float(distance_str)
+                    except ValueError:
+                        continue
+                # Convert miles to meters (1 mile = 1609.344 meters)
+                return int(distance_miles * 1609.344)
+        
+        # 2. Handle meter distances with various formats
+        meter_patterns = [
+            r'(\d+)\s*(?:metres|meters|m)\b',  # "100 metres", "200m", "400 meters"
+            r'(\d+)\s*(?=m\s)',  # "100m " (with space after m)
+            r'(\d+)m(?=\s|$)',   # "100m" at end or followed by space
+        ]
+        
+        for pattern in meter_patterns:
+            match = re.search(pattern, event_lower)
+            if match:
+                try:
+                    return int(match.group(1))
+                except ValueError:
+                    continue
+        
+        # 3. Handle kilometer distances (convert to meters)
+        km_patterns = [
+            r'(\d+(?:\.\d+)?)\s*(?:kilometres|kilometers|km)\b',
+        ]
+        
+        for pattern in km_patterns:
+            match = re.search(pattern, event_lower)
+            if match:
+                try:
+                    distance_km = float(match.group(1))
+                    return int(distance_km * 1000)  # Convert km to meters
+                except ValueError:
+                    continue
+        
+        # 4. Handle special cases
+        special_distances = {
+            'marathon': 42195,  # Marathon is 42.195 km
+            'half marathon': 21098,  # Half marathon
+            'steeplechase': 3000,  # Standard steeplechase
+            '110m hurdles': 110,
+            '100m hurdles': 100,
+            '400m hurdles': 400,
+        }
+        
+        for key, distance in special_distances.items():
+            if key in event_lower:
+                # Check if there's a specific distance mentioned with steeplechase
+                if 'steeplechase' in key:
+                    steeple_match = re.search(r'(\d+)(?:m|metres|meters)?\s*steeplechase', event_lower)
+                    if steeple_match:
+                        try:
+                            return int(steeple_match.group(1))
+                        except ValueError:
+                            pass
+                return distance
+        
+        # 5. Handle relay distances (extract the individual leg distance)
+        relay_match = re.search(r'(\d+)(?:m|metres|meters)?\s*(?:x\s*)?(\d+)(?:m|metres|meters)?.*relay', event_lower)
+        if relay_match:
+            try:
+                leg_distance = int(relay_match.group(2)) if relay_match.group(2) else int(relay_match.group(1))
+                return leg_distance
+            except ValueError:
+                pass
+        
+        return None
 
     df['event_name_standardized'] = df['event_name']
     df['event_group'] = df['event_name'].apply(categorize)
     
-    # Fix categorization logic - Hurdles should be Track, not Field
+    # Categorization logic
     def get_category(group):
         if group in ['Sprint', 'Distance', 'Hurdles']:
             return 'Track'
-        else:
+        elif group in ['Throws', 'Jumps']:
             return 'Field'
+        elif group in ['Distance (Road)']:
+            return 'Road'
+        else:
+            return 'Multi-event'
     
     df['event_category'] = df['event_group'].apply(get_category)
     df['is_outdoor_event'] = True
     
-    # Fix measurement unit logic
+    # Measurement unit logic
     def get_measurement_unit(category):
-        if category == 'Track':
+        if category == 'Track' or category == 'Road':
             return 'seconds'
         else:
             return 'meters'
@@ -123,8 +224,7 @@ def reconcile_events(engine):
     df['measurement_unit'] = df['event_category'].apply(get_measurement_unit)
     df['distance_meters'] = df['event_name'].apply(extract_distance)
     
-    # FIX: Use shorter gender value to fit VARCHAR(10)
-    df['gender'] = 'Mixed'  # 5 characters - fits in VARCHAR(10)
+    df['gender'] = 'Mixed' 
     
     df['world_record'] = None
 
@@ -549,7 +649,7 @@ def main():
         reconcile_competitions(engine)
         reconcile_performances(engine)
 
-        # Fix the count queries
+        # Count queries
         with engine.connect() as conn:
             tables = ['athletes', 'events', 'venues', 'weather_conditions', 'competitions', 'performances']
             for table in tables:
