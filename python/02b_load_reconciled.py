@@ -219,9 +219,27 @@ def reconcile_competitions(engine):
 
 
 def reconcile_venues(engine):
+    """Simplified version without fuzzy matching dependencies"""
     logger.info("Reconciling venues...")
     
-    # Get venues and extract cities using Python
+    # Country code mappings (3-letter to 2-letter)
+    country_mapping = {
+        'ITA': 'IT', 'FRA': 'FR', 'GER': 'DE', 'GBR': 'GB', 'USA': 'US',
+        'SUI': 'CH', 'NOR': 'NO', 'FIN': 'FI', 'BEL': 'BE', 'RUS': 'RU',
+        'ESP': 'ES', 'NED': 'NL', 'AUT': 'AT', 'SWE': 'SE', 'POL': 'PL',
+        'CZE': 'CZ', 'DEN': 'DK', 'POR': 'PT', 'GRE': 'GR', 'HUN': 'HU',
+        'CRO': 'HR', 'UKR': 'UA', 'CAN': 'CA', 'AUS': 'AU', 'JPN': 'JP'
+    }
+    
+    # City name mappings for common variations
+    city_mapping = {
+        'ROMA': 'ROME', 'MÜNCHEN': 'MUNICH', 'WIEN': 'VIENNA',
+        'FIRENZE': 'FLORENCE', 'VENEZIA': 'VENICE', 'NAPOLI': 'NAPLES',
+        'TORINO': 'TURIN', 'BRUXELLES': 'BRUSSELS', 'ZÜRICH': 'ZURICH',
+        'KÖLN': 'COLOGNE', 'LISBOA': 'LISBON'
+    }
+    
+    # Get venues and extract cities using improved Python logic
     venues_query = """
     SELECT DISTINCT venue_name
     FROM staging.clean_world_athletics
@@ -231,12 +249,51 @@ def reconcile_venues(engine):
     with engine.connect() as conn:
         venues_df = pd.read_sql(text(venues_query), conn)
     
-    # Extract city names
-    location_info = venues_df['venue_name'].apply(extract_location_from_venue)
-    venues_df['city_extracted'] = [info['city'] for info in location_info]
-    venues_df['country_extracted'] = [info['country'] for info in location_info]
+    # Extract location info with improved logic
+    def extract_location_improved(venue_name):
+        if pd.isna(venue_name):
+            return {'city': 'Unknown', 'country_2': 'XX'}
+        
+        venue_str = str(venue_name).strip()
+        
+        # Extract country code from parentheses
+        import re
+        country_match = re.search(r'\(([A-Z]{2,3})\)', venue_str)
+        country_3 = country_match.group(1) if country_match else 'Unknown'
+        country_2 = country_mapping.get(country_3, country_3[:2] if len(country_3) >= 2 else 'XX')
+        
+        # Remove country part for city extraction
+        venue_clean = re.sub(r'\s*\([^)]+\)', '', venue_str).strip()
+        
+        # Extract city
+        if ',' in venue_clean:
+            parts = venue_clean.split(',')
+            # Get the last meaningful part (skip state abbreviations)
+            for part in reversed(parts):
+                part = part.strip()
+                if len(part) > 2 and not re.match(r'^[A-Z]{2}$', part):
+                    city = part
+                    break
+            else:
+                city = parts[-1].strip()
+        else:
+            city = venue_clean
+            # Remove stadium words
+            stadium_words = ['stadium', 'stadion', 'stadio', 'field', 'arena', 'track']
+            for word in stadium_words:
+                city = re.sub(rf'\b{word}\b', '', city, flags=re.IGNORECASE).strip()
+        
+        # Apply city name mapping
+        city_upper = city.upper()
+        city_mapped = city_mapping.get(city_upper, city_upper)
+        
+        return {'city': city_mapped, 'country_2': country_2}
     
-    # Get filtered cities
+    location_info = venues_df['venue_name'].apply(extract_location_improved)
+    venues_df['city_extracted'] = [info['city'] for info in location_info]
+    venues_df['country_extracted'] = [info['country_2'] for info in location_info]
+    
+    # Get cities from database
     cities_query = """
     SELECT city_name, country_name, latitude, longitude, altitude, altitude_category
     FROM staging.clean_cities
@@ -246,28 +303,31 @@ def reconcile_venues(engine):
     with engine.connect() as conn:
         cities_df = pd.read_sql(text(cities_query), conn)
     
-    # Prepare for matching
-    venues_df['city_extracted_clean'] = venues_df['city_extracted'].str.strip().str.upper()
-    venues_df['country_extracted_clean'] = venues_df['country_extracted'].str.strip().str.upper()
+    logger.info(f"Found {len(venues_df)} venues and {len(cities_df)} cities")
     
-    # Match venues to cities
+    # Prepare for matching with case normalization
+    venues_df['city_clean'] = venues_df['city_extracted'].str.strip().str.upper()
+    venues_df['country_clean'] = venues_df['country_extracted'].str.strip().str.upper()
+    cities_df['city_clean'] = cities_df['city_name'].str.strip().str.upper()
+    cities_df['country_clean'] = cities_df['country_name'].str.strip().str.upper()
+    
+    # Perform the merge
     merged_df = venues_df.merge(
-        cities_df, 
-        left_on=['city_extracted_clean', 'country_extracted_clean'], 
-        right_on=['city_name', 'country_name'], 
+        cities_df,
+        left_on=['city_clean', 'country_clean'],
+        right_on=['city_clean', 'country_clean'],
         how='left'
     )
     
-    # Create clean venue data
+    # Clean up the results
     merged_df['venue_name_clean'] = merged_df['venue_name'].str.strip().str.title()
     merged_df['city_name'] = merged_df['city_name'].fillna(merged_df['city_extracted']).str.title()
     merged_df['country_name'] = merged_df['country_name'].fillna(merged_df['country_extracted']).str.upper()
-    merged_df = merged_df.drop_duplicates(subset='venue_name_clean', keep='first')
-
-    # Handle missing data with defaults
-    #merged_df['altitude'] = merged_df['altitude'].fillna(100)  # Default for unmatched venues
-    #merged_df['altitude_category'] = merged_df['altitude_category'].fillna('Sea Level') 
-
+    merged_df['country_code'] = merged_df['country_name'].fillna(merged_df['country_extracted']).str.upper()
+    
+    # Remove duplicates
+    merged_df = merged_df.drop_duplicates(subset='venue_name', keep='first')
+    
     # Climate categorization
     def determine_climate(lat):
         if pd.isna(lat): return 'Unknown'
@@ -276,34 +336,36 @@ def reconcile_venues(engine):
         elif abs_lat < 40: return 'Subtropical'
         elif abs_lat < 60: return 'Temperate'
         else: return 'Polar'
-
-    #merged_df['latitude'] = merged_df['latitude'].fillna(0.0)
-    #merged_df['longitude'] = merged_df['longitude'].fillna(0.0)
+    
     merged_df['climate_zone'] = merged_df['latitude'].apply(determine_climate)
     merged_df['geographic_source'] = 'Venue_Parsing_Plus_GeoNames_Elevation'
-
+    
     # Data quality scoring
     merged_df['data_quality_score'] = merged_df.apply(
-        lambda row: 9 if (pd.notna(row['latitude']) and row['latitude'] != 0 and pd.notna(row['altitude']) and row['altitude'] > 0) 
-                   else 7 if (pd.notna(row['latitude']) and row['latitude'] != 0)
+        lambda row: 9 if (pd.notna(row['latitude']) and pd.notna(row['altitude'])) 
+                   else 7 if pd.notna(row['latitude'])
                    else 5, axis=1
     )
-
+    
+    # Report statistics
+    total_venues = len(merged_df)
+    matched_venues = len(merged_df[pd.notna(merged_df['latitude'])])
+    logger.info(f"Matching results: {matched_venues}/{total_venues} venues matched ({matched_venues/total_venues*100:.1f}%)")
+    
     # Select final columns
     final_venues = merged_df[[
-        'venue_name', 'venue_name_clean', 'city_name', 'country_name',
+        'venue_name', 'venue_name_clean', 'city_name', 'country_name', 'country_code',
         'latitude', 'longitude', 'altitude', 'altitude_category', 
         'climate_zone', 'data_quality_score', 'geographic_source'
     ]]
-
-    # Save to reconciled layer
+    
+    # Save to database
     with engine.connect() as conn:
         final_venues.to_sql('venues', conn, schema='reconciled', if_exists='append', index=False)
         conn.commit()
     
-    logger.info(f"Reconciled {len(merged_df)} venues with best available geographic match")
-
-    return merged_df
+    logger.info(f"Inserted {len(final_venues)} venue records")
+    return final_venues
 
 
 
@@ -457,96 +519,6 @@ def ultra_fast_postgres_append(df, table_name, engine, schema='reconciled'):
             logger.error(f"COPY failed: {e}")
             logger.error(f"Attempted COPY command: {copy_sql}")
             raise
-
-
-
-def extract_location_from_venue(venue_name):     ### for Reconciled_venues
-    """Extract city and country from venue name"""
-    if pd.isna(venue_name):
-        return {'city': 'Unknown', 'country': 'Unknown', 'country_code': 'UNK'}
-    
-    venue_str = str(venue_name).strip()
-
-    # Handle pattern: "Stadium Name, City (Country)"
-    # Example: "Stadio Olimpico, Roma (ITA)"
-    if ',' in venue_str and '(' in venue_str:
-        parts = venue_str.split(',')
-        if len(parts) >= 2:
-            # Get city part (after comma, before parentheses)
-            city_part = parts[1].strip()
-            
-            # Extract city name (remove country in parentheses)
-            if '(' in city_part:
-                city = city_part[:city_part.find('(')].strip()
-                
-                # Extract country from parentheses
-                country_start = venue_str.find('(')
-                country_end = venue_str.find(')')
-                if country_start != -1 and country_end != -1:
-                    country = venue_str[country_start+1:country_end].strip()
-                else:
-                    country = 'Unknown'
-            else:
-                city = city_part
-                country = 'Unknown'
-                
-            return {'city': city.upper(), 'country': country.upper(), 'country_code': country.upper()[:3]}
-    
-    # Handle pattern: "City (Country)" - no stadium name
-    # Example: "Rieti (ITA)"
-    elif '(' in venue_str and ')' in venue_str and ',' not in venue_str:
-        city_part = venue_str[:venue_str.find('(')].strip()
-        
-        country_start = venue_str.find('(')
-        country_end = venue_str.find(')')
-        country = venue_str[country_start+1:country_end].strip()
-        
-        return {'city': city_part.upper(), 'country': country.upper(), 'country_code': country.upper()[:3]}
-    
-    # Handle pattern: "Venue Name, City, State (Country)"
-    # Example: "Hayward Field, Eugene, OR (USA)"
-    if ',' in venue_str and '(' in venue_str:
-        parts = venue_str.split(',')
-        if len(parts) >= 2:
-            # Get city (second part)
-            city = parts[1].strip()
-            
-            # Extract country from parentheses
-            if '(' in venue_str and ')' in venue_str:
-                country_part = venue_str[venue_str.find('(')+1:venue_str.find(')')]
-                country = country_part.strip()
-                country_code = country[:3].upper()  # USA, GBR, etc.
-            else:
-                country = 'Unknown'
-                country_code = 'UNK'
-                
-            return {'city': city, 'country': country, 'country_code': country_code}
-    
-    # Handle pattern: "Venue Name, City"
-    # Example: "Olympic Stadium, London"
-    elif ',' in venue_str:
-        parts = venue_str.split(',')
-        city = parts[-1].strip()  # Last part is usually the city
-        return {'city': city, 'country': 'Unknown', 'country_code': 'UNK'}
-    
-    # Handle pattern with parentheses but no comma
-    # Example: "Wembley Stadium (GBR)"
-    elif '(' in venue_str and ')' in venue_str:
-        country_part = venue_str[venue_str.find('(')+1:venue_str.find(')')]
-        country = country_part.strip()
-        country_code = country[:3].upper()
-        
-        # Try to extract city from venue name (remove venue type)
-        venue_base = venue_str[:venue_str.find('(')].strip()
-        city_words = ['stadium', 'field', 'arena', 'track', 'centre', 'center']
-        city = venue_base
-        for word in city_words:
-            city = city.replace(word, '').replace(word.title(), '').strip()
-        
-        return {'city': city if city else 'Unknown', 'country': country, 'country_code': country_code}
-    
-    # Fallback: use venue name as city
-    return {'city': venue_str, 'country': 'Unknown', 'country_code': 'UNK'}
 
 
 
