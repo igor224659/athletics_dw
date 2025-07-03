@@ -26,9 +26,7 @@ CREATE TABLE dwh.dim_venue (
     longitude DECIMAL(9,6),
     altitude INT,
     altitude_category VARCHAR(20), -- 'Sea Level', 'Moderate', 'High'
-    continent VARCHAR(30),
-    city_size VARCHAR(20), -- 'Small', 'Medium', 'Large', 'Megacity'
-    population INT
+    climate_zone VARCHAR(50)
 );
 
 -- Event Dimension
@@ -68,9 +66,10 @@ CREATE TABLE dwh.dim_competition (
 -- Weather Dimension
 CREATE TABLE dwh.dim_weather (
     weather_key SERIAL PRIMARY KEY,
+    venue_name VARCHAR(50),
+    month_name VARCHAR(20),
     temperature DECIMAL(5,2),
     temperature_category VARCHAR(20), -- 'Cold', 'Cool', 'Moderate', 'Warm', 'Hot'
-    month_name VARCHAR(20),
     season_category VARCHAR(20), -- 'Winter', 'Spring', 'Summer', 'Fall'
     has_actual_data BOOLEAN -- TRUE if real weather data, FALSE if estimated
 );
