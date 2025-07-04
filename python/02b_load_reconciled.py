@@ -506,10 +506,10 @@ def reconcile_performances(engine):
 
     # Read reference tables
     with engine.connect() as conn:
-        athletes = pd.read_sql(text("SELECT athlete_id, athlete_name_clean FROM reconciled.athletes"), conn)
-        events = pd.read_sql(text("SELECT event_id, event_name_standardized FROM reconciled.events"), conn)
-        venues = pd.read_sql(text("SELECT venue_id, venue_name_clean, city_name FROM reconciled.venues"), conn)
-        weather = pd.read_sql(text("SELECT weather_id, venue_name as city_name, month_name FROM reconciled.weather_conditions"), conn)
+        athletes = pd.read_sql(text("SELECT athlete_key, athlete_name_clean FROM reconciled.athletes"), conn)
+        events = pd.read_sql(text("SELECT event_key, event_name_standardized FROM reconciled.events"), conn)
+        venues = pd.read_sql(text("SELECT venue_key, venue_name_clean, city_name FROM reconciled.venues"), conn)
+        weather = pd.read_sql(text("SELECT weather_key, venue_name as city_name, month_name FROM reconciled.weather_conditions"), conn)
 
     logger.info(f"Reference table counts - Athletes: {len(athletes)}, Events: {len(events)}, Venues: {len(venues)}")
 
@@ -534,34 +534,34 @@ def reconcile_performances(engine):
     logger.info(f"STEP 5 - After weather join: {len(df)} records")
     
     # Assign all performances to the single default competition
-    df['competition_id'] = 1
+    df['competition_key'] = 1
 
     # Data quality filtering
     logger.info(f"Before filtering: {len(df)} records")
-    df = df.dropna(subset=['athlete_id', 'event_id'])
+    df = df.dropna(subset=['athlete_key', 'event_key'])
     logger.info(f"After requiring athlete/event IDs: {len(df)} records")
     
     # Fill missing foreign keys with default values
-    df['venue_id'] = df['venue_id'].fillna(1)  # Default venue
-    df['weather_id'] = df['weather_id'].fillna(1)  # Default weather
+    df['venue_key'] = df['venue_key'].fillna(1)  # Default venue
+    df['weather_key'] = df['weather_key'].fillna(1)  # Default weather
     df['data_quality_score'] = 8
     # Add created_date column to match SQL table structure
     df['created_date'] = pd.Timestamp.now()
 
     # Select final columns
-    final = df[['athlete_id', 'event_id', 'venue_id', 'weather_id', 'competition_id',
+    final = df[['athlete_key', 'event_key', 'venue_key', 'weather_key', 'competition_key',
                 'competition_date', 'result_value', 'wind_reading', 'position_finish',
                 'data_source', 'data_quality_score', 'created_date']]
 
     # Convert data types
-    final['athlete_id'] = final['athlete_id'].astype(int)
-    final['event_id'] = final['event_id'].astype(int) 
-    final['venue_id'] = final['venue_id'].astype(int)
-    final['weather_id'] = final['weather_id'].astype(int)
-    final['competition_id'] = final['competition_id'].astype(int)
+    final['athlete_key'] = final['athlete_key'].astype(int)
+    final['event_key'] = final['event_key'].astype(int) 
+    final['venue_key'] = final['venue_key'].astype(int)
+    final['weather_key'] = final['weather_key'].astype(int)
+    final['competition_key'] = final['competition_key'].astype(int)
 
     logger.info(f"Final performance records ready for insert: {len(final)}")
-    logger.info(f"Weather match success: {(final['weather_id'] != 1).sum()}/{len(final)} performances have weather data")
+    logger.info(f"Weather match success: {(final['weather_key'] != 1).sum()}/{len(final)} performances have weather data")
 
     #Use TRUNCATE + chunked append to preserve table structure
     with engine.connect() as conn:

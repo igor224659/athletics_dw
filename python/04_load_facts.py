@@ -42,7 +42,7 @@ def calculate_temperature_impact_factor(temperature, event_category):
 
 
 
-def calculate_performance_advantage(engine, performance_df):
+def calculate_performance_advantage(performance_df):
     """Calculate performance advantage vs venue average (DFM specification)"""
     logger.info("Calculating performance advantage vs venue averages...")
     
@@ -207,7 +207,7 @@ def load_fact_table(engine):
     with engine.connect() as conn:
         perf_query = """
         SELECT 
-            athlete_id, event_id, venue_id, weather_id,
+            athlete_key, event_key, venue_key, weather_key,
             competition_date, result_value, wind_reading, position_finish,
             data_source, data_quality_score, created_date
         FROM reconciled.performances
@@ -287,7 +287,7 @@ def load_fact_table(engine):
     
     # CONDITIONS - Weather
     perf = perf.merge(
-        weather_dim[['weather_key', 'temperature_celsius']], 
+        weather_dim[['weather_key', 'temperature']], 
         on='weather_key', how='left'
     )
     
@@ -324,23 +324,23 @@ def load_fact_table(engine):
     logger.info("Calculating ALL performance measures...")
     
     # Core DFM measures
-    logger.info("Calculating performance_score (ORIGINAL)")
+    logger.info("Calculating performance_score")
     perf['performance_score'] = perf.apply(lambda row:
         calculate_performance_score(row['result_value'], row['event_name'], row['measurement_unit']), axis=1)
 
-    logger.info("Calculating altitude_adjusted_result (ORIGINAL)")
+    logger.info("Calculating altitude_adjusted_result")
     perf['altitude_adjusted_result'] = perf.apply(lambda row:
         calculate_altitude_adjustment(row['result_value'], row['altitude'], row['event_category']), axis=1)
 
     # Environmental impact measures
-    logger.info("Calculating temperature_impact_factor (NEW)")
+    logger.info("Calculating temperature_impact_factor")
     perf['temperature_impact_factor'] = perf.apply(lambda row:
         calculate_temperature_impact_factor(row['temperature'], row['event_category']), axis=1)
     
-    logger.info("Calculating performance_advantage (NEW)")
+    logger.info("Calculating performance_advantage")
     perf['performance_advantage'] = calculate_performance_advantage(perf)
     
-    logger.info("Calculating environmental_bonus (NEW)")
+    logger.info("Calculating environmental_bonus")
     perf['environmental_bonus'] = perf.apply(lambda row:
         calculate_environmental_bonus(row['altitude'], row['temperature'], row['event_category']), axis=1)
 
@@ -411,11 +411,11 @@ def load_fact_table(engine):
     logger.info(f"Unique weather conditions: {final_df['weather_key'].nunique():,}")
     
     logger.info("ALL CALCULATION FUNCTIONS USED:")
-    logger.info(f"performance_score (ORIGINAL): avg = {final_df['performance_score'].mean():.1f}")
-    logger.info(f"altitude_adjusted_result (ORIGINAL): avg = {final_df['altitude_adjusted_result'].mean():.3f}")
-    logger.info(f"temperature_impact_factor (NEW): avg = {final_df['temperature_impact_factor'].mean():.3f}")
-    logger.info(f"performance_advantage (NEW): avg = {final_df['performance_advantage'].mean():.1f}")
-    logger.info(f"environmental_bonus (NEW): avg = {final_df['environmental_bonus'].mean():.2f}")
+    logger.info(f"performance_score: avg = {final_df['performance_score'].mean():.1f}")
+    logger.info(f"altitude_adjusted_result: avg = {final_df['altitude_adjusted_result'].mean():.3f}")
+    logger.info(f"temperature_impact_factor: avg = {final_df['temperature_impact_factor'].mean():.3f}")
+    logger.info(f"performance_advantage: avg = {final_df['performance_advantage'].mean():.1f}")
+    logger.info(f"environmental_bonus: avg = {final_df['environmental_bonus'].mean():.2f}")
 
 
     # Step 12: Load to database
@@ -437,7 +437,7 @@ def main():
         load_fact_table(engine)
 
         with engine.connect() as conn:
-            count = conn.execute("SELECT COUNT(*) FROM dwh.fact_performance").scalar()
+            count = conn.execute(text("SELECT COUNT(*) FROM dwh.fact_performance")).scalar()
             logger.info(f"Total fact records: {count}")
 
     except Exception as e:

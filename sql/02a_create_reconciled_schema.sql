@@ -2,7 +2,7 @@
 
 -- Reconciled Athletes (clean, standardized)
 CREATE TABLE reconciled.athletes (
-    athlete_id SERIAL PRIMARY KEY,
+    athlete_key SERIAL PRIMARY KEY,
     athlete_name VARCHAR(100) NOT NULL,
     athlete_name_clean VARCHAR(100),
     nationality VARCHAR(50),
@@ -18,7 +18,7 @@ CREATE TABLE reconciled.athletes (
 
 -- Reconciled Events (standardized event information)
 CREATE TABLE reconciled.events (
-    event_id SERIAL PRIMARY KEY,
+    event_key SERIAL PRIMARY KEY,
     event_name VARCHAR(50) NOT NULL,
     event_name_standardized VARCHAR(50),
     event_category VARCHAR(20), -- Track/Field
@@ -33,7 +33,7 @@ CREATE TABLE reconciled.events (
 
 -- Reconciled Venues (geographic data integrated)
 CREATE TABLE reconciled.venues (
-    venue_id SERIAL PRIMARY KEY,
+    venue_key SERIAL PRIMARY KEY,
     venue_name VARCHAR(100) NOT NULL,
     venue_name_clean VARCHAR(100),
     city_name VARCHAR(50),
@@ -53,7 +53,7 @@ CREATE TABLE reconciled.venues (
 
 -- Reconciled Weather (environmental conditions)
 CREATE TABLE reconciled.weather_conditions (
-    weather_id SERIAL PRIMARY KEY,
+    weather_key SERIAL PRIMARY KEY,
     venue_name VARCHAR(100),
     month_name VARCHAR(20),
     temperature DECIMAL(5,2),
@@ -66,7 +66,7 @@ CREATE TABLE reconciled.weather_conditions (
 
 -- Reconciled Competitions
 CREATE TABLE reconciled.competitions (
-    competition_id SERIAL PRIMARY KEY,
+    competition_key SERIAL PRIMARY KEY,
     competition_name VARCHAR(100),
     competition_type VARCHAR(30),     -- World Championships, Diamond League, etc.
     competition_level VARCHAR(30),    -- Elite, Professional, Amateur
@@ -77,12 +77,12 @@ CREATE TABLE reconciled.competitions (
 
 -- Reconciled Performances (integrated performance data)
 CREATE TABLE reconciled.performances (
-    performance_id SERIAL PRIMARY KEY,
-    athlete_id INT REFERENCES reconciled.athletes(athlete_id),
-    event_id INT REFERENCES reconciled.events(event_id),
-    venue_id INT REFERENCES reconciled.venues(venue_id),
-    weather_id INT REFERENCES reconciled.weather_conditions(weather_id),
-    competition_id INT REFERENCES reconciled.competitions(competition_id),
+    performance_key SERIAL PRIMARY KEY,
+    athlete_key INT REFERENCES reconciled.athletes(athlete_key),
+    event_key INT REFERENCES reconciled.events(event_key),
+    venue_key INT REFERENCES reconciled.venues(venue_key),
+    weather_key INT REFERENCES reconciled.weather_conditions(weather_key),
+    competition_key INT REFERENCES reconciled.competitions(competition_key),
     competition_date DATE,
     result_value DECIMAL(10,3),
     wind_reading DECIMAL(4,2),
@@ -93,10 +93,10 @@ CREATE TABLE reconciled.performances (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_reconciled_perf_athlete ON reconciled.performances(athlete_id);
-CREATE INDEX idx_reconciled_perf_event ON reconciled.performances(event_id);
-CREATE INDEX idx_reconciled_perf_venue ON reconciled.performances(venue_id);
-CREATE INDEX idx_reconciled_perf_competition ON reconciled.performances(competition_id);
+CREATE INDEX idx_reconciled_perf_athlete ON reconciled.performances(athlete_key);
+CREATE INDEX idx_reconciled_perf_event ON reconciled.performances(event_key);
+CREATE INDEX idx_reconciled_perf_venue ON reconciled.performances(venue_key);
+CREATE INDEX idx_reconciled_perf_competition ON reconciled.performances(competition_key);
 CREATE INDEX idx_reconciled_perf_date ON reconciled.performances(competition_date);
 
 COMMENT ON SCHEMA reconciled IS 'Layer 2: Clean, integrated, business-ready data';

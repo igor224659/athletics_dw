@@ -14,7 +14,7 @@ CREATE TABLE dwh.fact_performance (
     
     -- PRIMARY RESULTS
     result_value DECIMAL(10,3),  -- Time in seconds OR distance in meters
-    rank_position INT,           -- Position in competition (1st, 2nd, etc.)
+    rank_position VARCHAR(10),           -- Position in competition (1st, 2nd, etc.)
     wind_reading DECIMAL(4,2),   -- Wind speed in m/s (for applicable events)
 
     -- STANDARDIZE MEASURES
