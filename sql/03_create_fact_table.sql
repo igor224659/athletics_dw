@@ -27,11 +27,11 @@ CREATE TABLE dwh.fact_performance (
     environmental_bonus DECIMAL(8,3) DEFAULT 0.0,         -- Combined environmental benefit estimate
     
     -- PERFORMANCE CONTEXT
-    is_personal_best BOOLEAN DEFAULT FALSE,
-    is_season_best BOOLEAN DEFAULT FALSE,
-    is_championship_performance BOOLEAN DEFAULT FALSE,
-    is_world_record BOOLEAN DEFAULT FALSE,
-    is_national_record BOOLEAN DEFAULT FALSE,
+    --is_personal_best BOOLEAN DEFAULT FALSE,
+    --is_season_best BOOLEAN DEFAULT FALSE,
+    --is_championship_performance BOOLEAN DEFAULT FALSE,
+    --is_world_record BOOLEAN DEFAULT FALSE,
+    --is_national_record BOOLEAN DEFAULT FALSE,
     has_wind_data BOOLEAN DEFAULT FALSE,
     
     -- Data Quality
@@ -64,9 +64,9 @@ CREATE INDEX idx_fact_env_bonus ON dwh.fact_performance(environmental_bonus);
 
 
 -- Performance context indexes
-CREATE INDEX idx_fact_is_championship ON dwh.fact_performance(is_championship_performance);
-CREATE INDEX idx_fact_is_pb ON dwh.fact_performance(is_personal_best);
-CREATE INDEX idx_fact_records ON dwh.fact_performance(is_world_record, is_national_record);
+--CREATE INDEX idx_fact_is_championship ON dwh.fact_performance(is_championship_performance);
+--CREATE INDEX idx_fact_is_pb ON dwh.fact_performance(is_personal_best);
+--CREATE INDEX idx_fact_records ON dwh.fact_performance(is_world_record, is_national_record);
 
 
 -- COMPOSITE INDEXES FOR COMMON BUSINESS QUESTIONS (ENVIRONMENTAL IMPACT ANALYSIS)

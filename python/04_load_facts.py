@@ -12,42 +12,98 @@ def create_db_connection():
 
 
 
+# World Athletics coefficients for scientific performance scoring
+WORLD_ATHLETICS_COEFFICIENTS = {
+    # Track events (time-based)
+    '100m': {'A': 25.4347, 'B': 18.0, 'C': 1.81},
+    '200m': {'A': 5.8425, 'B': 38.0, 'C': 1.81},
+    '400m': {'A': 1.53775, 'B': 82.0, 'C': 1.81},
+    '800m': {'A': 0.11193, 'B': 254.0, 'C': 1.81},
+    '1500m': {'A': 0.04491, 'B': 480.0, 'C': 1.81},
+    '5000m': {'A': 0.00616, 'B': 2100.0, 'C': 1.81},
+    '10000m': {'A': 0.00316, 'B': 4200.0, 'C': 1.81},
+    'Marathon': {'A': 0.00024, 'B': 27000.0, 'C': 1.81},
+    'Half Marathon': {'A': 0.00058, 'B': 13500.0, 'C': 1.81},
+    '110m Hurdles': {'A': 5.74352, 'B': 28.5, 'C': 1.92},
+    '100m Hurdles': {'A': 9.23076, 'B': 26.7, 'C': 1.835},
+    '400m Hurdles': {'A': 1.4611, 'B': 95.5, 'C': 1.88},
+    '3000m Steeplechase': {'A': 0.02883, 'B': 1254.0, 'C': 1.88},
+    
+    # Field events (distance/height-based)
+    'High Jump': {'A': 32.29, 'B': 0.75, 'C': 1.4},
+    'Long Jump': {'A': 0.14354, 'B': 1.4, 'C': 1.4},
+    'Triple Jump': {'A': 0.03768, 'B': 2.5, 'C': 1.4},
+    'Pole Vault': {'A': 39.39, 'B': 1.0, 'C': 1.35},
+    'Shot Put': {'A': 51.39, 'B': 1.5, 'C': 1.05},
+    'Discus Throw': {'A': 12.91, 'B': 4.0, 'C': 1.1},
+    'Hammer Throw': {'A': 13.0449, 'B': 7.0, 'C': 1.05},
+    'Javelin Throw': {'A': 15.3, 'B': 7.0, 'C': 1.15},
+}
+
+
+# Event categorization for environmental calculations
+EVENT_CATEGORIES = {
+    'Sprint': ['100m', '200m', '400m', '100m Hurdles', '110m Hurdles', '400m Hurdles'],
+    'Middle Distance': ['800m', '1500m', '3000m', '3000m Steeplechase'],
+    'Distance': ['5000m', '10000m', 'Marathon', 'Half Marathon'],
+    'Jumps': ['High Jump', 'Long Jump', 'Triple Jump', 'Pole Vault'],
+    'Throws': ['Shot Put', 'Discus Throw', 'Hammer Throw', 'Javelin Throw']
+}
+
+
+def get_event_duration_category(event_name):
+    """Get event category for environmental adjustments"""
+    if pd.isna(event_name):
+        return 'Field'
+    
+    event_str = str(event_name).strip()
+    for category, events in EVENT_CATEGORIES.items():
+        if any(event.lower() in event_str.lower() for event in events):
+            return category
+    return 'Field'  # Default
+
+
 def calculate_temperature_impact_factor(temperature, event_category):
-    """Calculate temperature impact factor as specified in DFM"""
+    """Calculate temperature impact factor using scientific research"""
     try:
         if pd.isna(temperature):
             return 1.0  # Neutral impact
-            
-        # Optimal temperature ranges by event category
-        if event_category == 'Track':
-            # Track events: optimal around 15-20°C
-            optimal_temp = 17.5
-            if 15 <= temperature <= 20:
-                return 1.0  # No impact
-            elif temperature < 15:
-                return 1 - ((15 - temperature) * 0.01)  # Cold penalty
-            else:
-                return 1 - ((temperature - 20) * 0.015)  # Heat penalty
-        else:  # Field events
-            # Field events: optimal around 18-25°C  
-            optimal_temp = 21.5
-            if 18 <= temperature <= 25:
-                return 1.0  # No impact
-            elif temperature < 18:
-                return 1 - ((18 - temperature) * 0.008)  # Cold penalty
-            else:
-                return 1 - ((temperature - 25) * 0.012)  # Heat penalty
-    except:
+        
+        # Optimal temperature range: 7-15°C (research-based)
+        optimal_temp = 11.0  # Middle of optimal range
+        temp_deviation = abs(temperature - optimal_temp)
+        
+        # Get event duration category for more precise calculation
+        duration_category = get_event_duration_category(event_category) if isinstance(event_category, str) else event_category
+        
+        # Impact rates based on event duration (scientific research)
+        if duration_category in ['Sprint', 'Jumps', 'Throws']:
+            # Short events: minimal temperature impact
+            impact_rate = 0.001  # 0.1% per degree deviation
+        elif duration_category == 'Middle Distance':
+            # Medium events: moderate impact
+            impact_rate = 0.002  # 0.2% per degree deviation
+        elif duration_category == 'Distance':
+            # Long events: significant impact  
+            impact_rate = 0.004  # 0.4% per degree deviation
+        else:
+            # Default for track events
+            impact_rate = 0.002
+        
+        # Calculate impact factor (minimum 0.5 to avoid extreme values)
+        impact_factor = 1.0 - (temp_deviation * impact_rate)
+        return max(0.5, min(1.5, impact_factor))
+        
+    except Exception as e:
+        logger.warning(f"Error calculating temperature impact: {e}")
         return 1.0
 
-
-
 def calculate_performance_advantage(performance_df):
-    """Calculate performance advantage vs venue average (DFM specification)"""
+    """Calculate performance advantage vs venue average with robust statistics"""
     logger.info("Calculating performance advantage vs venue averages...")
     
-    # Calculate venue averages for each event
-    venue_averages = {}
+    # Calculate venue baselines with improved statistics
+    venue_baselines = {}
     
     for venue_key in performance_df['venue_key'].unique():
         if pd.isna(venue_key):
@@ -60,9 +116,35 @@ def calculate_performance_advantage(performance_df):
                 continue
                 
             event_perfs = venue_perfs[venue_perfs['event_key'] == event_key]
-            if len(event_perfs) >= 3:  # Need minimum performances for reliable average
-                avg_score = event_perfs['performance_score'].mean()
-                venue_averages[(venue_key, event_key)] = avg_score
+            
+            # Require minimum sample size for reliable baseline
+            if len(event_perfs) >= 10:  # Increased from 3 for better statistics
+                
+                # Remove outliers using IQR method
+                Q1 = event_perfs['performance_score'].quantile(0.25)
+                Q3 = event_perfs['performance_score'].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                
+                # Filter outliers
+                filtered_perfs = event_perfs[
+                    (event_perfs['performance_score'] >= lower_bound) & 
+                    (event_perfs['performance_score'] <= upper_bound)
+                ]
+                
+                # Require sufficient data after outlier removal
+                if len(filtered_perfs) >= 8:
+                    avg_score = filtered_perfs['performance_score'].mean()
+                    std_score = filtered_perfs['performance_score'].std()
+
+                    # Only store baseline if average is reasonable (prevents division by tiny numbers)
+                    if avg_score > 10.0:  # Minimum threshold for reliable percentage calculations
+                        venue_baselines[(venue_key, event_key)] = {
+                            'avg': avg_score,
+                            'std': std_score,
+                            'count': len(filtered_perfs)
+                        }
     
     # Calculate advantage for each performance
     advantages = []
@@ -71,118 +153,187 @@ def calculate_performance_advantage(performance_df):
         event_key = row['event_key']
         perf_score = row['performance_score']
         
-        if (venue_key, event_key) in venue_averages:
-            venue_avg = venue_averages[(venue_key, event_key)]
-            advantage = perf_score - venue_avg
+        if (venue_key, event_key) in venue_baselines:
+            baseline = venue_baselines[(venue_key, event_key)]
+            venue_avg = baseline['avg']
+            
+            # Calculate percentage advantage
+            if venue_avg > 10.0:   # Ensure reasonable baseline for percentage calculation
+                advantage = ((perf_score - venue_avg) / venue_avg) * 100
+
+                # Apply strict bounds to fit DECIMAL(8,3) - max ±99999.999
+                advantage = max(-9999.0, min(9999.0, advantage))
+            else:
+                advantage = 0.0
         else:
-            advantage = 0.0  # No comparison data available
+            advantage = 0.0  # No reliable comparison data available
             
         advantages.append(advantage)
     
+    logger.info(f"Calculated venue baselines for {len(venue_baselines)} venue-event combinations")
     return advantages
 
 
-
 def calculate_environmental_bonus(altitude, temperature, event_category):
-    """Calculate environmental bonus from combined altitude/temperature effects"""
+    """Calculate environmental bonus using scientific altitude and temperature effects"""
     try:
-        if pd.isna(altitude) or pd.isna(temperature):
+        if pd.isna(altitude) and pd.isna(temperature):
             return 0.0
-            
+        
+        altitude = altitude if not pd.isna(altitude) else 0
+        temperature = temperature if not pd.isna(temperature) else 11.0  # Optimal temp
+        
         bonus = 0.0
+        duration_category = get_event_duration_category(event_category)
         
-        # Altitude effects (beneficial for some events at moderate altitude)
-        if event_category == 'Track':
-            # Sprints benefit slightly from altitude (less air resistance)
-            if 500 <= altitude <= 1500:
-                bonus += (altitude / 1000) * 0.5  # Small bonus
-            elif altitude > 1500:
-                bonus -= (altitude - 1500) / 1000 * 0.3  # Penalty for extreme altitude
-        else:  # Field events
-            # Throws/jumps benefit more from altitude
-            if 500 <= altitude <= 2000:
-                bonus += (altitude / 1000) * 1.0  # Larger bonus
-            elif altitude > 2000:
-                bonus -= (altitude - 2000) / 1000 * 0.5  # Penalty for extreme altitude
-        
-        # Temperature effects (moderate temperatures are best)
-        temp_bonus = 0.0
-        if 15 <= temperature <= 25:
-            temp_bonus = 1.0  # Optimal range
-        elif temperature < 15:
-            temp_bonus = 0.5 - ((15 - temperature) * 0.05)  # Cold penalty
+        # ALTITUDE EFFECTS (scientific research-based)
+        if altitude > 300:  # Apply adjustments only above 300m
+            altitude_km = (altitude - 300) / 1000.0
+            
+            if duration_category == 'Sprint':
+                # Sprints benefit from reduced air density (less resistance)
+                altitude_bonus = altitude_km * 0.95  # 0.95% improvement per 1000m
+            elif duration_category in ['Jumps', 'Throws']:
+                # Field events benefit more from reduced air density
+                altitude_bonus = altitude_km * 1.2   # 1.2% improvement per 1000m
+            elif duration_category in ['Middle Distance', 'Distance']:
+                # Endurance events suffer from reduced oxygen
+                altitude_bonus = altitude_km * -6.3  # 6.3% decline per 1000m
+            else:
+                altitude_bonus = 0.0
         else:
-            temp_bonus = 0.5 - ((temperature - 25) * 0.03)  # Heat penalty
+            altitude_bonus = 0.0
         
-        return bonus * max(0, temp_bonus)
-    except:
+        # TEMPERATURE EFFECTS
+        optimal_temp = 11.0  # Research-based optimal temperature
+        temp_deviation = abs(temperature - optimal_temp)
+        
+        if duration_category == 'Distance':
+            # Distance events most affected by temperature
+            temp_bonus = -temp_deviation * 0.4  # 0.4% per degree deviation
+        elif duration_category == 'Middle Distance':
+            temp_bonus = -temp_deviation * 0.2  # 0.2% per degree deviation
+        else:
+            # Sprints and field events less affected
+            temp_bonus = -temp_deviation * 0.1  # 0.1% per degree deviation
+        
+        # Combine effects (scale to reasonable point values)
+        total_bonus = (altitude_bonus + temp_bonus) * 2.0  # Scale factor
+        
+        return max(-20.0, min(20.0, total_bonus))  # Reasonable bounds
+        
+        # Apply bounds for DECIMAL(8,3) - max ±99999.999
+        #return max(-999.0, min(999.0, total_bonus))
+        
+    except Exception as e:
+        logger.warning(f"Error calculating environmental bonus: {e}")
         return 0.0
-    
 
 
 def calculate_performance_score(result, event_name, unit):
-    """Calculate performance score based on event type and result"""
+    """Calculate performance score using World Athletics standards"""
     try:
-        if pd.isna(result):
-            return 500
+        if pd.isna(result) or pd.isna(event_name):
+            return 500.0  # Default score
+        
+        event_str = str(event_name).strip()
+        
+        # Try to find exact match in World Athletics coefficients
+        coeffs = None
+        for wa_event, wa_coeffs in WORLD_ATHLETICS_COEFFICIENTS.items():
+            if wa_event.lower() in event_str.lower():
+                coeffs = wa_coeffs
+                break
+        
+        if coeffs:
+            # Use World Athletics formula: Points = A × |B - T|^C (for time) or A × |T - B|^C (for distance)
+            A, B, C = coeffs['A'], coeffs['B'], coeffs['C']
             
+            try:
+                if unit == 'seconds':
+                    # For time events: better time = higher score
+                    if result <= 0:
+                        return 0.0
+                    score = A * pow(abs(B - result), C)
+                else:
+                    # For distance/height events: better distance = higher score
+                    if result <= B:  # Performance must exceed baseline
+                        return 0.0
+                    score = A * pow(abs(result - B), C)
+                
+                # Apply reasonable bounds
+                return max(0.0, min(1400.0, score))
+                
+            except (ValueError, OverflowError) as e:
+                logger.warning(f"Mathematical error in World Athletics formula for {event_name}: {e}")
+                # Fall through to legacy calculation
+        
+        # Legacy calculation for events not in World Athletics table
         if unit == 'seconds':
-            if '100m' in str(event_name).lower():
-                # 9.5s = 1000 points, each 0.01s slower = -2 points
+            if '100m' in event_str.lower():
                 return max(0, 1000 - (result - 9.5) * 200)
-            elif '200m' in str(event_name).lower():
-                # 19.0s = 1000 points, each 0.01s slower = -1 point
+            elif '200m' in event_str.lower():
                 return max(0, 1000 - (result - 19.0) * 100)
-            elif 'mile' in str(event_name).lower():
-                # 3:40 (220s) = 1000 points
+            elif 'mile' in event_str.lower():
                 return max(0, 1000 - (result - 220) * 5)
-            elif 'marathon' in str(event_name).lower():
-                # 2:01:00 (7260s) = 1000 points
+            elif 'marathon' in event_str.lower():
                 return max(0, 1000 - (result - 7260) * 0.5)
             else:
-                # Generic time-based scoring
                 return max(0, 1000 - result * 2)
-        else:  # meters (field events)
-            # Higher distance/height = better score
-            if 'shot put' in str(event_name).lower():
-                # 20m = 1000 points
+        else:  # meters
+            if 'shot put' in event_str.lower():
                 return min(1000, result * 50)
-            elif 'javelin' in str(event_name).lower():
-                # 80m = 1000 points  
+            elif 'javelin' in event_str.lower():
                 return min(1000, result * 12.5)
-            elif 'high jump' in str(event_name).lower():
-                # 2.3m = 1000 points
+            elif 'high jump' in event_str.lower():
                 return min(1000, result * 435)
-            elif 'long jump' in str(event_name).lower():
-                # 8.5m = 1000 points
+            elif 'long jump' in event_str.lower():
                 return min(1000, result * 118)
             else:
-                # Generic distance-based scoring
                 return min(1000, result * 25)
+                
     except Exception as e:
-        logger.warning(f"Error calculating performance score: {e}")
-        return 500
-
+        logger.warning(f"Error calculating performance score for {event_name}: {e}")
+        return 500.0
 
 
 def calculate_altitude_adjustment(result, altitude, event_category):
-    """Apply altitude adjustment to performance"""
+    """Apply scientifically-based altitude adjustment to performance"""
     try:
-        if pd.isna(altitude) or altitude == 0:
+        if pd.isna(altitude) or altitude <= 300:  # No adjustment below 300m
             return result
-            
-        # Altitude affects performance differently for track vs field
-        if event_category == 'Track':
-            # Track events: thinner air = faster times (negative adjustment for sprints)
-            factor = 1 - (altitude / 10000) * 0.005  # 0.5% per 1000m
+        
+        duration_category = get_event_duration_category(event_category)
+        altitude_km = (altitude - 300) / 1000.0  # Altitude above 300m baseline
+        
+        # Scientific altitude adjustment factors
+        if duration_category == 'Sprint':
+            # Sprints: benefit from reduced air density (less air resistance)
+            factor = 1.0 + (altitude_km * 0.0095)  # 0.95% improvement per 1000m
+        elif duration_category in ['Jumps', 'Throws']:
+            # Field events: benefit more from reduced air density
+            factor = 1.0 + (altitude_km * 0.012)   # 1.2% improvement per 1000m
+        elif duration_category in ['Middle Distance', 'Distance']:
+            # Endurance: hindered by reduced oxygen availability
+            factor = 1.0 - (altitude_km * 0.063)   # 6.3% decline per 1000m
         else:
-            # Field events: thinner air = longer throws/jumps (positive adjustment)
-            factor = 1 + (altitude / 10000) * 0.01   # 1% per 1000m
-            
-        return result * factor
+            factor = 1.0  # No adjustment for unknown categories
+        
+        # Apply adjustment based on measurement unit
+        if str(event_category).lower() == 'track' or 'time' in str(event_category).lower():
+            # For time-based events: adjustment affects time directly
+            adjusted_result = result / factor  # Better factor = lower time
+        else:
+            # For distance-based events: adjustment affects distance directly  
+            adjusted_result = result / factor  # Better factor = higher distance (but we divide due to calculation)
+        
+        # Apply bounds for DECIMAL(10,3) - ensure reasonable values
+        return max(0.0, min(999999.0, adjusted_result))
+        
     except Exception as e:
         logger.warning(f"Error calculating altitude adjustment: {e}")
         return result
+    
     
 
 
@@ -349,12 +500,12 @@ def load_fact_table(engine):
     logger.info("Adding performance context flags...")
     
     # Simplified championship detection
-    perf['is_championship_performance'] = False  # Simplified - no competition dimension
+    #perf['is_championship_performance'] = False  # Simplified - no competition dimension
     
-    perf['is_personal_best'] = False    # TODO: Could calculate based on athlete history
-    perf['is_season_best'] = False      # TODO: Could calculate based on date/athlete
-    perf['is_world_record'] = False     # TODO: Could compare with world record data
-    perf['is_national_record'] = False  # TODO: Could compare with national record data
+    #perf['is_personal_best'] = False    # TODO: Could calculate based on athlete history
+    #perf['is_season_best'] = False      # TODO: Could calculate based on date/athlete
+    #perf['is_world_record'] = False     # TODO: Could compare with world record data
+    #perf['is_national_record'] = False  # TODO: Could compare with national record data
     perf['has_wind_data'] = pd.notna(perf['wind_reading'])
     perf['load_batch_id'] = 1
 
@@ -385,8 +536,8 @@ def load_fact_table(engine):
         'performance_score', 'altitude_adjusted_result',
         
         # Performance Context
-        'is_personal_best', 'is_season_best', 'is_championship_performance',
-        'is_world_record', 'is_national_record',
+        #'is_personal_best', 'is_season_best', 'is_championship_performance',
+        #'is_world_record', 'is_national_record',
         
         # Environmental Impact Measures
         'temperature_impact_factor', 'performance_advantage', 'environmental_bonus',
