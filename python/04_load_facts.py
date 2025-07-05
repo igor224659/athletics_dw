@@ -15,29 +15,29 @@ def create_db_connection():
 # World Athletics coefficients for scientific performance scoring
 WORLD_ATHLETICS_COEFFICIENTS = {
     # Track events (time-based)
-    '100m': {'A': 25.4347, 'B': 18.0, 'C': 1.81},
-    '200m': {'A': 5.8425, 'B': 38.0, 'C': 1.81},
-    '400m': {'A': 1.53775, 'B': 82.0, 'C': 1.81},
-    '800m': {'A': 0.11193, 'B': 254.0, 'C': 1.81},
-    '1500m': {'A': 0.04491, 'B': 480.0, 'C': 1.81},
-    '5000m': {'A': 0.00616, 'B': 2100.0, 'C': 1.81},
-    '10000m': {'A': 0.00316, 'B': 4200.0, 'C': 1.81},
-    'Marathon': {'A': 0.00024, 'B': 27000.0, 'C': 1.81},
-    'Half Marathon': {'A': 0.00058, 'B': 13500.0, 'C': 1.81},
-    '110m Hurdles': {'A': 5.74352, 'B': 28.5, 'C': 1.92},
-    '100m Hurdles': {'A': 9.23076, 'B': 26.7, 'C': 1.835},
-    '400m Hurdles': {'A': 1.4611, 'B': 95.5, 'C': 1.88},
-    '3000m Steeplechase': {'A': 0.02883, 'B': 1254.0, 'C': 1.88},
+    '100 Metres': {'A': 28.67, 'B': 18.0, 'C': 1.81},
+    '200 Metres': {'A': 6.674, 'B': 38.0, 'C': 1.81},
+    '400 Metres': {'A': 1.745, 'B': 82.0, 'C': 1.81},
+    '800 Metres': {'A': 0.1444, 'B': 254.0, 'C': 1.81},
+    '1500 Metres': {'A': 0.0504, 'B': 480.0, 'C': 1.81},
+    '5000 Metres': {'A': 0.00283, 'B': 2100.0, 'C': 1.81},
+    '10000 Metres': {'A': 0.0008436, 'B': 4200.0, 'C': 1.81},
+    'Marathon': {'A': 0.0004865, 'B': 10800.0, 'C': 1.81},      # 3 hours baseline
+    'Half Marathon': {'A': 0.0014044, 'B': 5400.0, 'C': 1.81},  # 1.5 hours baseline
+    '110 Metres Hurdles': {'A': 6.544, 'B': 28.5, 'C': 1.92},
+    '100 Metres Hurdles': {'A': 9.31, 'B': 26.7, 'C': 1.835},
+    '400 Metres Hurdles': {'A': 0.8722, 'B': 95.5, 'C': 1.88},
+    '3000 Metres Steeplechase': {'A': 0.004711, 'B': 1254.0, 'C': 1.88},
     
     # Field events (distance/height-based)
-    'High Jump': {'A': 32.29, 'B': 0.75, 'C': 1.4},
-    'Long Jump': {'A': 0.14354, 'B': 1.4, 'C': 1.4},
-    'Triple Jump': {'A': 0.03768, 'B': 2.5, 'C': 1.4},
-    'Pole Vault': {'A': 39.39, 'B': 1.0, 'C': 1.35},
-    'Shot Put': {'A': 51.39, 'B': 1.5, 'C': 1.05},
-    'Discus Throw': {'A': 12.91, 'B': 4.0, 'C': 1.1},
-    'Hammer Throw': {'A': 13.0449, 'B': 7.0, 'C': 1.05},
-    'Javelin Throw': {'A': 15.3, 'B': 7.0, 'C': 1.15},
+    'High Jump': {'A': 625.1, 'B': 0.75, 'C': 1.4},
+    'Long Jump': {'A': 79.42, 'B': 1.4, 'C': 1.4},
+    'Triple Jump': {'A': 27.37, 'B': 2.5, 'C': 1.4},
+    'Pole Vault': {'A': 142.2, 'B': 1.0, 'C': 1.35},
+    'Shot Put': {'A': 51.8, 'B': 1.5, 'C': 1.05},
+    'Discus Throw': {'A': 12.28, 'B': 4.0, 'C': 1.1},
+    'Hammer Throw': {'A': 13.17, 'B': 7.0, 'C': 1.05},
+    'Javelin Throw': {'A': 7.58, 'B': 7.0, 'C': 1.15},
 }
 
 
@@ -361,8 +361,13 @@ def load_fact_table(engine):
             athlete_key, event_key, venue_key, weather_key,
             competition_date, result_value, wind_reading, position_finish,
             data_source, data_quality_score, created_date
-        FROM reconciled.performances
+        FROM reconciled.performances p
         WHERE result_value IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM reconciled.events e 
+            WHERE e.event_key = p.event_key 
+            AND e.event_name ILIKE '%half marathon%'
+        )
         """
         perf = pd.read_sql(text(perf_query), conn)
 
