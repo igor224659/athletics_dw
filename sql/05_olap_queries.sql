@@ -471,8 +471,8 @@ SELECT
         'altitude category "', v.altitude_category, '" shows ',
         ROUND(AVG(f.performance_score), 1), ' average score - ',
         CASE 
-            WHEN AVG(f.performance_score) > 700 THEN 'HIGHLY RECOMMENDED'
-            WHEN AVG(f.performance_score) > 600 THEN 'RECOMMENDED'
+            WHEN AVG(f.performance_score) > 1100 THEN 'HIGHLY RECOMMENDED'
+            WHEN AVG(f.performance_score) > 1000 THEN 'RECOMMENDED'
             ELSE 'AVOID'
         END
     ) as recommendation

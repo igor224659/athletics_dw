@@ -43,9 +43,9 @@ WORLD_ATHLETICS_COEFFICIENTS = {
 
 # Event categorization for environmental calculations
 EVENT_CATEGORIES = {
-    'Sprint': ['100m', '200m', '400m', '100m Hurdles', '110m Hurdles', '400m Hurdles'],
-    'Middle Distance': ['800m', '1500m', '3000m', '3000m Steeplechase'],
-    'Distance': ['5000m', '10000m', 'Marathon', 'Half Marathon'],
+    'Sprint': ['100 Metres', '200 Metres', '300 Metres', '400 Metres', '100 Metres Hurdles', '110 Metres Hurdles', '400 Metres Hurdles'],
+    'Middle Distance': ['600 Metres', '800 Metres', '1000 Metres', '1500 Metres', 'One Mile', 'Two Miles', '3000 Metres', '3000 Metres Steeplechase', '2000 Metres', '2000 Metres Steeplechase'],
+    'Distance': ['5000 Metres', '10000 Metres', 'Marathon', 'Half Marathon', '3000 Metres Race Walk', '5000 Metres Race Walk', '10000 Metres Race Walk', '20000 Metres Race Walk'],
     'Jumps': ['High Jump', 'Long Jump', 'Triple Jump', 'Pole Vault'],
     'Throws': ['Shot Put', 'Discus Throw', 'Hammer Throw', 'Javelin Throw']
 }
@@ -297,13 +297,13 @@ def calculate_performance_score(result, event_name, unit):
         return 500.0
 
 
-def calculate_altitude_adjustment(result, altitude, event_category):
+def calculate_altitude_adjustment(result, altitude, event_name, measurement_unit):
     """Apply scientifically-based altitude adjustment to performance"""
     try:
         if pd.isna(altitude) or altitude <= 300:  # No adjustment below 300m
             return result
         
-        duration_category = get_event_duration_category(event_category)
+        duration_category = get_event_duration_category(event_name)
         altitude_km = (altitude - 300) / 1000.0  # Altitude above 300m baseline
         
         # Scientific altitude adjustment factors
@@ -320,12 +320,16 @@ def calculate_altitude_adjustment(result, altitude, event_category):
             factor = 1.0  # No adjustment for unknown categories
         
         # Apply adjustment based on measurement unit
-        if str(event_category).lower() == 'track' or 'time' in str(event_category).lower():
-            # For time-based events: adjustment affects time directly
-            adjusted_result = result / factor  # Better factor = lower time
+        if measurement_unit == 'seconds':
+            # For time-based events: better performance = lower time
+            # If factor > 1.0 (beneficial conditions), divide to get lower time
+            # If factor < 1.0 (detrimental conditions), divide to get higher time
+            adjusted_result = result / factor
         else:
-            # For distance-based events: adjustment affects distance directly  
-            adjusted_result = result / factor  # Better factor = higher distance (but we divide due to calculation)
+            # For distance/height events: better performance = higher distance
+            # If factor > 1.0 (beneficial conditions), multiply to get higher distance
+            # If factor < 1.0 (detrimental conditions), multiply to get lower distance
+            adjusted_result = result * factor 
         
         # Apply bounds for DECIMAL(10,3) - ensure reasonable values
         return max(0.0, min(999999.0, adjusted_result))
@@ -486,7 +490,7 @@ def load_fact_table(engine):
 
     logger.info("Calculating altitude_adjusted_result")
     perf['altitude_adjusted_result'] = perf.apply(lambda row:
-        calculate_altitude_adjustment(row['result_value'], row['altitude'], row['event_category']), axis=1)
+        calculate_altitude_adjustment(row['result_value'], row['altitude'], row['event_name'], row['measurement_unit']), axis=1)
 
     # Environmental impact measures
     logger.info("Calculating temperature_impact_factor")
@@ -534,6 +538,9 @@ def load_fact_table(engine):
         'weather_key',      # CONDITIONS
         # NOTE: No competition_key - simplified!
         
+        # Athlete Context
+        'gender',
+
         # Primary Results
         'result_value', 'rank_position', 'wind_reading',
         

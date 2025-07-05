@@ -11,6 +11,8 @@ CREATE TABLE dwh.fact_performance (
     weather_key INT REFERENCES dwh.dim_weather(weather_key),
     -- competition_key INT REFERENCES dwh.dim_competition(competition_key),
     -- NOTE: competition_key REMOVED for simplification
+
+    gender VARCHAR(3),
     
     -- PRIMARY RESULTS
     result_value DECIMAL(10,3),  -- Time in seconds OR distance in meters
