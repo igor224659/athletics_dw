@@ -21,19 +21,12 @@ CREATE TABLE dwh.fact_performance (
 
     -- STANDARDIZE MEASURES
     performance_score DECIMAL(10,3),        -- Standardized 0-1000 score
-    altitude_adjusted_result DECIMAL(10,3), -- Altitude compensation
 
     -- ENVIRONMENTAL IMPACT MEASURES
+    altitude_adjusted_result DECIMAL(10,3), -- Altitude compensation
     temperature_impact_factor DECIMAL(5,3) DEFAULT 1.0,  -- Temperature effect factor (1.0 = neutral)
-    performance_advantage DECIMAL(8,3) DEFAULT 0.0,       -- Performance vs venue average (points)
-    environmental_bonus DECIMAL(8,3) DEFAULT 0.0,         -- Combined environmental benefit estimate
     
     -- PERFORMANCE CONTEXT
-    --is_personal_best BOOLEAN DEFAULT FALSE,
-    --is_season_best BOOLEAN DEFAULT FALSE,
-    --is_championship_performance BOOLEAN DEFAULT FALSE,
-    --is_world_record BOOLEAN DEFAULT FALSE,
-    --is_national_record BOOLEAN DEFAULT FALSE,
     has_wind_data BOOLEAN DEFAULT FALSE,
     
     -- Data Quality
@@ -52,7 +45,6 @@ CREATE INDEX idx_fact_event ON dwh.fact_performance(event_key);
 CREATE INDEX idx_fact_venue ON dwh.fact_performance(venue_key);
 CREATE INDEX idx_fact_date ON dwh.fact_performance(date_key);
 CREATE INDEX idx_fact_weather ON dwh.fact_performance(weather_key);
---CREATE INDEX idx_fact_competition ON dwh.fact_performance(competition_key);
 
 -- Measure indexes for analytical queries
 CREATE INDEX idx_fact_performance_score ON dwh.fact_performance(performance_score);
@@ -61,14 +53,6 @@ CREATE INDEX idx_fact_rank_position ON dwh.fact_performance(rank_position);
 
 -- Environmental analysis indexes
 CREATE INDEX idx_fact_temp_impact ON dwh.fact_performance(temperature_impact_factor);
-CREATE INDEX idx_fact_perf_advantage ON dwh.fact_performance(performance_advantage);
-CREATE INDEX idx_fact_env_bonus ON dwh.fact_performance(environmental_bonus);
-
-
--- Performance context indexes
---CREATE INDEX idx_fact_is_championship ON dwh.fact_performance(is_championship_performance);
---CREATE INDEX idx_fact_is_pb ON dwh.fact_performance(is_personal_best);
---CREATE INDEX idx_fact_records ON dwh.fact_performance(is_world_record, is_national_record);
 
 
 -- COMPOSITE INDEXES FOR COMMON BUSINESS QUESTIONS (ENVIRONMENTAL IMPACT ANALYSIS)
