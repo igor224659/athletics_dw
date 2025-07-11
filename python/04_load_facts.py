@@ -91,51 +91,50 @@ WORLD_ATHLETICS_COEFFICIENTS = {
         '100 Metres Hurdles': {'A': 9.31, 'B': 26.7, 'C': 1.835},  # Women's hurdles
         '400 Metres Hurdles': {'A': 0.671, 'B': 107.0, 'C': 1.88},
         '3000 Metres Steeplechase': {'A': 0.003303, 'B': 1465.0, 'C': 1.88},
-        # hereee
+        
         # Additional track events
-        '300 Metres': {'A': 1.95, 'B': 72.0, 'C': 1.81},
-        '600 Metres': {'A': 0.19, 'B': 210.0, 'C': 1.81},
-        '800 Metres': {'A': 0.111, 'B': 285.0, 'C': 1.81},
-        '1000 Metres': {'A': 0.06, 'B': 425.0, 'C': 1.81},
-        '2000 Metres': {'A': 0.018, 'B': 820.0, 'C': 1.81},
-        '3000 Metres': {'A': 0.0068, 'B': 1380.0, 'C': 1.81},
-        'One Mile': {'A': 0.033, 'B': 570.0, 'C': 1.81},
-        'Two Miles': {'A': 0.0085, 'B': 1200.0, 'C': 1.81},
+        '300 Metres': {'A': 1.789, 'B': 72.0, 'C': 1.81},
+        '600 Metres': {'A': 0.1903, 'B': 210.0, 'C': 1.81},
+        '800 Metres': {'A': 0.115936, 'B': 285.0, 'C': 1.81},
+        '1000 Metres': {'A': 0.04778, 'B': 425.0, 'C': 1.81},
+        '2000 Metres': {'A': 0.01626, 'B': 820.0, 'C': 1.81},
+        '3000 Metres': {'A': 0.005886, 'B': 1380.0, 'C': 1.81},
+        'One Mile': {'A': 0.03708, 'B': 570.0, 'C': 1.81},
+        'Two Miles': {'A': 0.00972, 'B': 1200.0, 'C': 1.81},
 
         # Short Road Events
-        '5 Kilometres': {'A': 0.00204, 'B': 2400.0, 'C': 1.81},        # Same as 5000m
-        '10 Kilometres': {'A': 0.00058, 'B': 4800.0, 'C': 1.81},       # Same as 10000m
-        '15 Kilometres': {'A': 0.00018, 'B': 7200.0, 'C': 1.81},       # ~54min baseline
-        '20 Kilometres': {'A': 0.00009, 'B': 9600.0, 'C': 1.81},       # ~80min baseline
+        '5 Kilometres': {'A': 0.002119, 'B': 2400.0, 'C': 1.81},        # Same as 5000m
+        '10 Kilometres': {'A': 0.000641, 'B': 4800.0, 'C': 1.81},       # Same as 10000m
+        '15 Kilometres': {'A': 0.0003061, 'B': 7200.0, 'C': 1.81},       # ~54min baseline
+        '20 Kilometres': {'A': 0.0001841, 'B': 9600.0, 'C': 1.81},       # ~80min baseline
         
         # Long Road Events
-        'Half Marathon': {'A': 0.00098, 'B': 6300.0, 'C': 1.81},       # 1.75 hours baseline
-        'Marathon': {'A': 0.000315, 'B': 12600.0, 'C': 1.81},          # 3.5 hours baseline
-        '10 Miles Road': {'A': 0.00028, 'B': 8400.0, 'C': 1.81},       # ~2.3 hours baseline
+        'Half Marathon': {'A': 0.0008882, 'B': 6300.0, 'C': 1.81},       # 1.75 hours baseline
+        'Marathon': {'A': 0.00029305, 'B': 12600.0, 'C': 1.81},          # 3.5 hours baseline
+        '10 Miles Road': {'A': 0.0002112, 'B': 8400.0, 'C': 1.81},       # ~2.3 hours baseline
         
         # Track Race Walking
-        '3000 Metres Race Walk': {'A': 0.0025, 'B': 2100.0, 'C': 1.81},    # ~35min baseline
-        '5000 Metres Race Walk': {'A': 0.001, 'B': 3600.0, 'C': 1.81},     # ~60min baseline
-        '10000 Metres Race Walk': {'A': 0.0003, 'B': 7200.0, 'C': 1.81},   # ~120min baseline
-        '20000 Metres Race Walk': {'A': 0.00015, 'B': 14400.0, 'C': 1.81}, # ~240min baseline
+        '3000 Metres Race Walk': {'A': 0.0024365, 'B': 2100.0, 'C': 1.81},    # ~35min baseline
+        '5000 Metres Race Walk': {'A': 0.00093, 'B': 3600.0, 'C': 1.81},     # ~60min baseline
+        '10000 Metres Race Walk': {'A': 0.0002728, 'B': 7200.0, 'C': 1.81},   # ~120min baseline
+        '20000 Metres Race Walk': {'A': 0.00008003, 'B': 14400.0, 'C': 1.81}, # ~240min baseline
         
         # Road Race Walking
-        '5 Kilometres Race Walk': {'A': 0.001, 'B': 3600.0, 'C': 1.81},    # ~60min baseline
-        '10 Kilometres Race Walk': {'A': 0.0003, 'B': 7200.0, 'C': 1.81},  # ~120min baseline
-        '20 Kilometres Race Walk': {'A': 0.00015, 'B': 14400.0, 'C': 1.81}, # ~240min baseline
-        '30 Kilometres Race Walk': {'A': 0.00006, 'B': 21600.0, 'C': 1.81}, # ~360min baseline
-        '35 Kilometres Race Walk': {'A': 0.00004, 'B': 25200.0, 'C': 1.81}, # ~420min baseline
-        '50 Kilometres Race Walk': {'A': 0.00002, 'B': 36000.0, 'C': 1.81}, # ~600min baseline
+        '5 Kilometres Race Walk': {'A': 0.000934, 'B': 3600.0, 'C': 1.81},    # ~60min baseline
+        '10 Kilometres Race Walk': {'A': 0.0002733, 'B': 7200.0, 'C': 1.81},  # ~120min baseline
+        '20 Kilometres Race Walk': {'A': 0.0000808, 'B': 14400.0, 'C': 1.81}, # ~240min baseline
+        '35 Kilometres Race Walk': {'A': 0.00003187, 'B': 25200.0, 'C': 1.81}, # ~420min baseline
+        '50 Kilometres Race Walk': {'A': 0.00001765, 'B': 36000.0, 'C': 1.81}, # ~600min baseline
         
         # Field events for women (different standards)
-        'High Jump': {'A': 540.0, 'B': 0.75, 'C': 1.4},           # Adjusted for women's records
-        'Long Jump': {'A': 188.0, 'B': 1.4, 'C': 1.4},            # Adjusted for women's records  
-        'Triple Jump': {'A': 55.8, 'B': 2.5, 'C': 1.4},           # Adjusted for women's records
-        'Pole Vault': {'A': 516.0, 'B': 1.0, 'C': 1.35},          # Adjusted for women's records
-        'Shot Put': {'A': 56.6, 'B': 1.5, 'C': 1.05},             # Different implement weight
-        'Discus Throw': {'A': 12.28, 'B': 3.0, 'C': 1.1},         # Different implement weight
-        'Hammer Throw': {'A': 17.5, 'B': 4.0, 'C': 1.05},         # Different implement weight
-        'Javelin Throw': {'A': 15.9, 'B': 3.0, 'C': 1.15},        # Different implement specs
+        'High Jump': {'A': 869.0, 'B': 0.75, 'C': 1.4},           # Adjusted for women's records
+        'Long Jump': {'A': 105.53, 'B': 1.4, 'C': 1.4},            # Adjusted for women's records  
+        'Triple Jump': {'A': 34.86, 'B': 2.5, 'C': 1.4},           # Adjusted for women's records
+        'Pole Vault': {'A': 194.6, 'B': 1.0, 'C': 1.35},          # Adjusted for women's records
+        'Shot Put': {'A': 55.75, 'B': 1.5, 'C': 1.05},             # Different implement weight
+        'Discus Throw': {'A': 12.18, 'B': 3.0, 'C': 1.1},         # Different implement weight
+        'Hammer Throw': {'A': 13.26, 'B': 4.0, 'C': 1.05},         # Different implement weight
+        'Javelin Throw': {'A': 9.983, 'B': 3.0, 'C': 1.15},        # Different implement specs
     }
 }
 
