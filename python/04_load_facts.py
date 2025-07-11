@@ -14,31 +14,198 @@ def create_db_connection():
 
 # World Athletics coefficients for scientific performance scoring
 WORLD_ATHLETICS_COEFFICIENTS = {
-    # Track events (time-based)
-    '100 Metres': {'A': 28.67, 'B': 18.0, 'C': 1.81},
-    '200 Metres': {'A': 6.674, 'B': 38.0, 'C': 1.81},
-    '400 Metres': {'A': 1.745, 'B': 82.0, 'C': 1.81},
-    '800 Metres': {'A': 0.1444, 'B': 254.0, 'C': 1.81},
-    '1500 Metres': {'A': 0.0504, 'B': 480.0, 'C': 1.81},
-    '5000 Metres': {'A': 0.00283, 'B': 2100.0, 'C': 1.81},
-    '10000 Metres': {'A': 0.0008436, 'B': 4200.0, 'C': 1.81},
-    'Marathon': {'A': 0.0004865, 'B': 10800.0, 'C': 1.81},      # 3 hours baseline
-    'Half Marathon': {'A': 0.0014044, 'B': 5400.0, 'C': 1.81},  # 1.5 hours baseline
-    '110 Metres Hurdles': {'A': 6.544, 'B': 28.5, 'C': 1.92},
-    '100 Metres Hurdles': {'A': 9.31, 'B': 26.7, 'C': 1.835},
-    '400 Metres Hurdles': {'A': 0.8722, 'B': 95.5, 'C': 1.88},
-    '3000 Metres Steeplechase': {'A': 0.004711, 'B': 1254.0, 'C': 1.88},
+    # MEN'S EVENTS
+    'M': {
+        # Track events (time-based)
+        '100 Metres': {'A': 28.67, 'B': 18.0, 'C': 1.81},
+        '200 Metres': {'A': 6.674, 'B': 38.0, 'C': 1.81},
+        '400 Metres': {'A': 1.745, 'B': 82.0, 'C': 1.81},
+        '800 Metres': {'A': 0.1444, 'B': 254.0, 'C': 1.81},
+        '1500 Metres': {'A': 0.0504, 'B': 480.0, 'C': 1.81},
+        '5000 Metres': {'A': 0.00283, 'B': 2100.0, 'C': 1.81},
+        '10000 Metres': {'A': 0.0008436, 'B': 4200.0, 'C': 1.81},
+        
+        # Hurdles and barriers
+        '110 Metres Hurdles': {'A': 6.544, 'B': 28.5, 'C': 1.92},
+        '400 Metres Hurdles': {'A': 0.8722, 'B': 95.5, 'C': 1.88},
+        '3000 Metres Steeplechase': {'A': 0.004711, 'B': 1254.0, 'C': 1.88},
+
+        # Field events (distance/height-based)
+        'High Jump': {'A': 625.1, 'B': 0.75, 'C': 1.4},
+        'Long Jump': {'A': 79.42, 'B': 1.4, 'C': 1.4},
+        'Triple Jump': {'A': 27.37, 'B': 2.5, 'C': 1.4},
+        'Pole Vault': {'A': 142.2, 'B': 1.0, 'C': 1.35},
+        'Shot Put': {'A': 51.8, 'B': 1.5, 'C': 1.05},
+        'Discus Throw': {'A': 12.28, 'B': 4.0, 'C': 1.1},
+        'Hammer Throw': {'A': 13.17, 'B': 7.0, 'C': 1.05},
+        'Javelin Throw': {'A': 7.58, 'B': 7.0, 'C': 1.15},
+        
+        # Additional track events (estimated A values)
+        '300 Metres': {'A': 2.139, 'B': 65.0, 'C': 1.81},           # Rarely run
+        '600 Metres': {'A': 0.2414, 'B': 185.0, 'C': 1.81},         # Middle distance
+        '1000 Metres': {'A': 0.0601, 'B': 375.0, 'C': 1.81},        # Middle distance
+        '2000 Metres': {'A': 0.02174, 'B': 720.0, 'C': 1.81},       # Distance
+        '3000 Metres': {'A': 0.007944, 'B': 1200.0, 'C': 1.81},     # Distance
+        'One Mile': {'A': 0.04907, 'B': 500.0, 'C': 1.81},          # 1609m equivalent
+        'Two Miles': {'A': 0.013154, 'B': 1050.0, 'C': 1.81},        # ~3200m
+
+        # Short Road Events
+        '5 Kilometres': {'A': 0.002768, 'B': 2100.0, 'C': 1.81},      
+        '10 Kilometres': {'A': 0.0008375, 'B': 4200.0, 'C': 1.81},    
+        '15 Kilometres': {'A': 0.000407, 'B': 6300.0, 'C': 1.81},       # ~45min baseline
+        '20 Kilometres': {'A': 0.0002434, 'B': 8400.0, 'C': 1.81},       # ~70min baseline
+        
+        # Long Road Events  
+        'Half Marathon': {'A': 0.00143, 'B': 5400.0, 'C': 1.81},     # 1.5 hours baseline
+        'Marathon': {'A': 0.0004865, 'B': 10800.0, 'C': 1.81},         # 3 hours baseline
+        '10 Miles Road': {'A': 0.0003, 'B': 7200.0, 'C': 1.81},        # ~2 hours baseline
+        
+        # Track Race Walking
+        '3000 Metres Race Walk': {'A': 0.003503, 'B': 1800.0, 'C': 1.81},    # ~30min baseline
+        '5000 Metres Race Walk': {'A': 0.001396, 'B': 3000.0, 'C': 1.81},    # ~50min baseline
+        '10000 Metres Race Walk': {'A': 0.0004205, 'B': 6000.0, 'C': 1.81},   # ~100min baseline
+        '20000 Metres Race Walk': {'A': 0.0001251, 'B': 12000.0, 'C': 1.81},  # ~200min baseline
+        
+        # Road Race Walking
+        '5 Kilometres Race Walk': {'A': 0.00139, 'B': 3000.0, 'C': 1.81},   # ~50min baseline
+        '10 Kilometres Race Walk': {'A': 0.0004214, 'B': 6000.0, 'C': 1.81},  # ~100min baseline
+        '20 Kilometres Race Walk': {'A': 0.0001255, 'B': 12000.0, 'C': 1.81}, # ~200min baseline
+        '30 Kilometres Race Walk': {'A': 0.0000634, 'B': 18000.0, 'C': 1.81}, # ~300min baseline
+        '35 Kilometres Race Walk': {'A': 0.00004824, 'B': 21000.0, 'C': 1.81}, # ~350min baseline
+        '50 Kilometres Race Walk': {'A': 0.00002723, 'B': 30000.0, 'C': 1.81}, # ~500min baseline
+        
+    },
     
-    # Field events (distance/height-based)
-    'High Jump': {'A': 625.1, 'B': 0.75, 'C': 1.4},
-    'Long Jump': {'A': 79.42, 'B': 1.4, 'C': 1.4},
-    'Triple Jump': {'A': 27.37, 'B': 2.5, 'C': 1.4},
-    'Pole Vault': {'A': 142.2, 'B': 1.0, 'C': 1.35},
-    'Shot Put': {'A': 51.8, 'B': 1.5, 'C': 1.05},
-    'Discus Throw': {'A': 12.28, 'B': 4.0, 'C': 1.1},
-    'Hammer Throw': {'A': 13.17, 'B': 7.0, 'C': 1.05},
-    'Javelin Throw': {'A': 7.58, 'B': 7.0, 'C': 1.15},
+    # WOMEN'S EVENTS
+    'F': {
+        # Track events (time-based)
+        '100 Metres': {'A': 18.6, 'B': 21.0, 'C': 1.81},
+        '200 Metres': {'A': 5.217, 'B': 42.5, 'C': 1.81},
+        '400 Metres': {'A': 1.377, 'B': 91.7, 'C': 1.81},
+        '800 Metres': {'A': 0.11594, 'B': 285.0, 'C': 1.81},
+        '1500 Metres': {'A': 0.04106, 'B': 535.0, 'C': 1.81},
+        '5000 Metres': {'A': 0.00213, 'B': 2400.0, 'C': 1.81},
+        '10000 Metres': {'A': 0.00064, 'B': 4800.0, 'C': 1.81},
+        
+        # Hurdles
+        '100 Metres Hurdles': {'A': 9.31, 'B': 26.7, 'C': 1.835},  # Women's hurdles
+        '400 Metres Hurdles': {'A': 0.671, 'B': 107.0, 'C': 1.88},
+        '3000 Metres Steeplechase': {'A': 0.003303, 'B': 1465.0, 'C': 1.88},
+        # hereee
+        # Additional track events
+        '300 Metres': {'A': 1.95, 'B': 72.0, 'C': 1.81},
+        '600 Metres': {'A': 0.19, 'B': 210.0, 'C': 1.81},
+        '800 Metres': {'A': 0.111, 'B': 285.0, 'C': 1.81},
+        '1000 Metres': {'A': 0.06, 'B': 425.0, 'C': 1.81},
+        '2000 Metres': {'A': 0.018, 'B': 820.0, 'C': 1.81},
+        '3000 Metres': {'A': 0.0068, 'B': 1380.0, 'C': 1.81},
+        'One Mile': {'A': 0.033, 'B': 570.0, 'C': 1.81},
+        'Two Miles': {'A': 0.0085, 'B': 1200.0, 'C': 1.81},
+
+        # Short Road Events
+        '5 Kilometres': {'A': 0.00204, 'B': 2400.0, 'C': 1.81},        # Same as 5000m
+        '10 Kilometres': {'A': 0.00058, 'B': 4800.0, 'C': 1.81},       # Same as 10000m
+        '15 Kilometres': {'A': 0.00018, 'B': 7200.0, 'C': 1.81},       # ~54min baseline
+        '20 Kilometres': {'A': 0.00009, 'B': 9600.0, 'C': 1.81},       # ~80min baseline
+        
+        # Long Road Events
+        'Half Marathon': {'A': 0.00098, 'B': 6300.0, 'C': 1.81},       # 1.75 hours baseline
+        'Marathon': {'A': 0.000315, 'B': 12600.0, 'C': 1.81},          # 3.5 hours baseline
+        '10 Miles Road': {'A': 0.00028, 'B': 8400.0, 'C': 1.81},       # ~2.3 hours baseline
+        
+        # Track Race Walking
+        '3000 Metres Race Walk': {'A': 0.0025, 'B': 2100.0, 'C': 1.81},    # ~35min baseline
+        '5000 Metres Race Walk': {'A': 0.001, 'B': 3600.0, 'C': 1.81},     # ~60min baseline
+        '10000 Metres Race Walk': {'A': 0.0003, 'B': 7200.0, 'C': 1.81},   # ~120min baseline
+        '20000 Metres Race Walk': {'A': 0.00015, 'B': 14400.0, 'C': 1.81}, # ~240min baseline
+        
+        # Road Race Walking
+        '5 Kilometres Race Walk': {'A': 0.001, 'B': 3600.0, 'C': 1.81},    # ~60min baseline
+        '10 Kilometres Race Walk': {'A': 0.0003, 'B': 7200.0, 'C': 1.81},  # ~120min baseline
+        '20 Kilometres Race Walk': {'A': 0.00015, 'B': 14400.0, 'C': 1.81}, # ~240min baseline
+        '30 Kilometres Race Walk': {'A': 0.00006, 'B': 21600.0, 'C': 1.81}, # ~360min baseline
+        '35 Kilometres Race Walk': {'A': 0.00004, 'B': 25200.0, 'C': 1.81}, # ~420min baseline
+        '50 Kilometres Race Walk': {'A': 0.00002, 'B': 36000.0, 'C': 1.81}, # ~600min baseline
+        
+        # Field events for women (different standards)
+        'High Jump': {'A': 540.0, 'B': 0.75, 'C': 1.4},           # Adjusted for women's records
+        'Long Jump': {'A': 188.0, 'B': 1.4, 'C': 1.4},            # Adjusted for women's records  
+        'Triple Jump': {'A': 55.8, 'B': 2.5, 'C': 1.4},           # Adjusted for women's records
+        'Pole Vault': {'A': 516.0, 'B': 1.0, 'C': 1.35},          # Adjusted for women's records
+        'Shot Put': {'A': 56.6, 'B': 1.5, 'C': 1.05},             # Different implement weight
+        'Discus Throw': {'A': 12.28, 'B': 3.0, 'C': 1.1},         # Different implement weight
+        'Hammer Throw': {'A': 17.5, 'B': 4.0, 'C': 1.05},         # Different implement weight
+        'Javelin Throw': {'A': 15.9, 'B': 3.0, 'C': 1.15},        # Different implement specs
+    }
 }
+
+def calculate_performance_score_enhanced(result, event_name, measurement_unit, gender):
+    """
+    Enhanced performance score calculation with gender-specific coefficients
+    
+    Args:
+        result: Performance result (time in seconds or distance in meters)
+        event_name: Name of the athletic event
+        measurement_unit: 'seconds' for time events, 'meters' for distance/height events
+        gender: 'M', 'F', 'Male', 'Female', 'Men', 'Women', etc.
+    
+    Returns:
+        Performance score (0-1400 scale, with elite performances around 1000-1200)
+    """
+    try:
+        if pd.isna(result) or pd.isna(event_name) or result <= 0:
+            return 500.0  # Default score for invalid data
+        
+        # Clean event name for matching
+        event_str = str(event_name).strip()
+        
+        # Try to find coefficients for this gender and event
+        coeffs = None
+        gender_coeffs = WORLD_ATHLETICS_COEFFICIENTS[gender]
+        
+        # Exact match first
+        if event_str in gender_coeffs:
+            coeffs = gender_coeffs[event_str]
+        else:
+            # Partial match - look for event keywords
+            for wa_event, wa_coeffs in gender_coeffs.items():
+                if wa_event.lower() in event_str.lower() or event_str.lower() in wa_event.lower():
+                    coeffs = wa_coeffs
+                    break
+        
+        if coeffs:
+            # Apply World Athletics formula
+            A, B, C = coeffs['A'], coeffs['B'], coeffs['C']
+            
+            try:
+                if measurement_unit == 'seconds':
+                    # For time events: better time (lower) = higher score
+                    # Formula: A × |B - T|^C where T is time
+                    if result <= 0:
+                        return 0.0
+                    score = A * pow(abs(B - result), C)
+                else:
+                    # For distance/height events: better distance (higher) = higher score  
+                    # Formula: A × |T - B|^C where T is distance/height
+                    if result <= B:  # Performance must exceed baseline
+                        return max(0.0, A * pow(abs(result - B), C) * 0.1)  # Minimal score for sub-baseline
+                    score = A * pow(abs(result - B), C)
+                
+                # Apply reasonable bounds (World Athletics scale typically 0-1400)
+                return max(0.0, min(1400.0, score))
+                
+            except (ValueError, OverflowError, ZeroDivisionError) as e:
+                logger.warning(f"Mathematical error in World Athletics formula for {event_name} ({gender}): {e}")
+                return 500.0  # Fallback score
+        
+        else:
+            # No coefficients found - use legacy calculation
+            logger.info(f"No World Athletics coefficients found for {event_name} ({gender})")
+            #return calculate_legacy_score(result, event_str, measurement_unit, gender)
+            
+    except Exception as e:
+        logger.warning(f"Error calculating performance score for {event_name} ({gender}): {e}")
+        return 500.0
 
 
 # Event categorization for environmental calculations
@@ -385,8 +552,15 @@ def load_fact_table(engine):
     
     # Core DFM measures
     logger.info("Calculating performance_score")
+    # perf['performance_score'] = perf.apply(lambda row:
+    #     calculate_performance_score(row['result_value'], row['event_name'], row['measurement_unit']), axis=1)
     perf['performance_score'] = perf.apply(lambda row:
-        calculate_performance_score(row['result_value'], row['event_name'], row['measurement_unit']), axis=1)
+        calculate_performance_score_enhanced(
+            row['result_value'], 
+            row['event_name'], 
+            row['measurement_unit'],
+            row['gender'] 
+        ), axis=1)
 
     logger.info("Calculating altitude_adjusted_result")
     perf['altitude_adjusted_result'] = perf.apply(lambda row:
