@@ -38,7 +38,7 @@ CREATE TABLE reconciled.venues (
     venue_name_clean VARCHAR(100),
     city_name VARCHAR(50),
     country_name VARCHAR(50),
-    country_code VARCHAR(3),
+    country_code VARCHAR(20),
     latitude DECIMAL(9,6),
     longitude DECIMAL(9,6),
     altitude INT,
@@ -64,16 +64,6 @@ CREATE TABLE reconciled.weather_conditions (
     created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Reconciled Competitions
-CREATE TABLE reconciled.competitions (
-    competition_key SERIAL PRIMARY KEY,
-    competition_name VARCHAR(100),
-    competition_type VARCHAR(30),     -- World Championships, Diamond League, etc.
-    competition_level VARCHAR(30),    -- Elite, Professional, Amateur
-    prestige_level INT,               -- 5=World Championships, 4=Continental, etc.
-    is_indoor BOOLEAN,
-    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
 -- Reconciled Performances (integrated performance data)
 CREATE TABLE reconciled.performances (
@@ -82,7 +72,6 @@ CREATE TABLE reconciled.performances (
     event_key INT REFERENCES reconciled.events(event_key),
     venue_key INT REFERENCES reconciled.venues(venue_key),
     weather_key INT REFERENCES reconciled.weather_conditions(weather_key),
-    competition_key INT REFERENCES reconciled.competitions(competition_key),
     competition_date DATE,
     result_value DECIMAL(10,3),
     wind_reading DECIMAL(4,2),
@@ -96,7 +85,7 @@ CREATE TABLE reconciled.performances (
 CREATE INDEX idx_reconciled_perf_athlete ON reconciled.performances(athlete_key);
 CREATE INDEX idx_reconciled_perf_event ON reconciled.performances(event_key);
 CREATE INDEX idx_reconciled_perf_venue ON reconciled.performances(venue_key);
-CREATE INDEX idx_reconciled_perf_competition ON reconciled.performances(competition_key);
+--CREATE INDEX idx_reconciled_perf_competition ON reconciled.performances(competition_key);
 CREATE INDEX idx_reconciled_perf_date ON reconciled.performances(competition_date);
 
 COMMENT ON SCHEMA reconciled IS 'Layer 2: Clean, integrated, business-ready data';

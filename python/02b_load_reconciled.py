@@ -242,104 +242,256 @@ def reconcile_events(engine):
 
 
 def reconcile_weather(engine):
+    """
+    Reconcile weather data - use existing temperature classifications from transform stage
+    """
     logger.info("Reconciling weather conditions...")
 
+    # Get existing temperature data (already processed in transform stage)
     query = """
     SELECT DISTINCT
-        "City" as venue_name,   -- Map city to venue_name as per table schema
+        "City" as venue_name,   
         "Month" as month,
         "AvgTemperature" as temperature,
-        temperature_category,
+        temperature_category,  -- Already created in transform stage
         data_source
     FROM staging.clean_temperature
-    WHERE "City" IS NOT NULL AND "Month" IS NOT NULL
+    WHERE "City" IS NOT NULL 
+      AND "Month" IS NOT NULL
+      AND temperature_category IS NOT NULL
     """
 
     with engine.connect() as conn:
         df = pd.read_sql(text(query), conn)
 
+    logger.info(f"Loaded {len(df)} temperature records from transform stage")
+
+    # Clean up data
     df = df.dropna(subset=['venue_name', 'month'])
 
+    # Standardize city names to match venue standardization
+    def standardize_weather_city_name(city_name):
+        if pd.isna(city_name):
+            return 'UNKNOWN'
+        
+        city_str = str(city_name).strip().upper()
+        
+        # Apply same standardization as venues
+        standardization_map = {
+            'ROMA': 'ROME', 'ATHINA': 'ATHENS', 'BRUXELLES': 'BRUSSELS',
+            'LA HABANA': 'HAVANA', 'ZÜRICH': 'ZURICH', 'MÜNCHEN': 'MUNICH',
+            'WIEN': 'VIENNA', 'MOSKVA': 'MOSCOW', 'BUCUREŞTI': 'BUCHAREST',
+            'PRAHA': 'PRAGUE', 'WARSZAWA': 'WARSAW'
+        }
+        
+        return standardization_map.get(city_str, city_str)
+    
+    df['venue_name'] = df['venue_name'].apply(standardize_weather_city_name)
+
+    # Add month names and seasons
     df['month_name'] = df['month'].apply(lambda x: calendar.month_name[int(x)] if not pd.isna(x) else 'Unknown')
 
-    # Add season category
     def get_season(month):
         if pd.isna(month):
             return 'Unknown'
         month = int(month)
-        if month in [12, 1, 2]:
-            return 'Winter'
-        elif month in [3, 4, 5]:
-            return 'Spring'
-        elif month in [6, 7, 8]:
-            return 'Summer'
-        else:
-            return 'Fall'
+        if month in [12, 1, 2]: return 'Winter'
+        elif month in [3, 4, 5]: return 'Spring'
+        elif month in [6, 7, 8]: return 'Summer'
+        else: return 'Fall'
     
     df['season_category'] = df['month'].apply(get_season)
+    df['has_actual_data'] = True
+    df['weather_source'] = df['data_source']
 
-    df['has_actual_data'] = True  # All temperature data is actual
-    df['weather_source'] = 'data_source'
+    # Add weather estimates for major athletics cities missing from temperature data
+    # Get list of cities from venues that need weather
+    with engine.connect() as conn:
+        venue_cities = pd.read_sql(text("""
+            SELECT DISTINCT 
+                CASE 
+                    WHEN venue_name LIKE '%Sacramento%' THEN 'SACRAMENTO'
+                    WHEN venue_name LIKE '%Eugene%' THEN 'EUGENE'
+                    WHEN venue_name LIKE '%Austin%' THEN 'AUSTIN'
+                    WHEN venue_name LIKE '%Monaco%' THEN 'MONACO'
+                    WHEN venue_name LIKE '%Lausanne%' THEN 'LAUSANNE'
+                    WHEN venue_name LIKE '%Kingston%' THEN 'KINGSTON'
+                    WHEN venue_name LIKE '%Des Moines%' THEN 'DES MOINES'
+                    WHEN venue_name LIKE '%Palo Alto%' THEN 'SAN FRANCISCO'
+                    WHEN venue_name LIKE '%Walnut%' THEN 'LOS ANGELES'
+                    WHEN venue_name LIKE '%Indianapolis%' THEN 'INDIANAPOLIS'
+                    WHEN venue_name LIKE '%Gainesville%' THEN 'GAINESVILLE'
+                    WHEN venue_name LIKE '%Knoxville%' THEN 'KNOXVILLE'
+                    WHEN venue_name LIKE '%Doha%' THEN 'DOHA'
+                    ELSE NULL
+                END as needed_city
+            FROM staging.clean_world_athletics
+            WHERE venue_name IS NOT NULL
+        """), conn)
+    
+    needed_cities = set(venue_cities['needed_city'].dropna().unique())
+    existing_cities = set(df['venue_name'].unique())
+    missing_cities = needed_cities - existing_cities
+    
+    if missing_cities:
+        logger.info(f"Adding weather estimates for {len(missing_cities)} missing athletics cities: {missing_cities}")
+        
+        # Simple climate-based estimates for missing cities
+        city_climate_estimates = {
+            'SACRAMENTO': {'temps': [10, 13, 16, 20, 25, 30, 33, 32, 28, 22, 15, 10], 'climate': 'Mediterranean'},
+            'EUGENE': {'temps': [5, 7, 10, 13, 17, 21, 24, 24, 20, 15, 9, 5], 'climate': 'Temperate'},
+            'AUSTIN': {'temps': [10, 13, 18, 23, 28, 32, 35, 35, 31, 25, 18, 12], 'climate': 'Subtropical'},
+            'MONACO': {'temps': [9, 10, 13, 16, 20, 24, 27, 27, 23, 19, 13, 10], 'climate': 'Mediterranean'},
+            'LAUSANNE': {'temps': [1, 3, 7, 11, 16, 20, 22, 21, 17, 12, 6, 2], 'climate': 'Temperate'},
+            'KINGSTON': {'temps': [25, 25, 26, 27, 28, 29, 29, 29, 28, 27, 26, 25], 'climate': 'Tropical'},
+            'DES MOINES': {'temps': [-5, -2, 5, 12, 18, 24, 26, 25, 20, 13, 5, -2], 'climate': 'Continental'},
+            'SAN FRANCISCO': {'temps': [10, 12, 13, 15, 16, 17, 17, 18, 19, 17, 14, 11], 'climate': 'Mediterranean'},
+            'LOS ANGELES': {'temps': [14, 15, 16, 18, 20, 22, 24, 25, 24, 21, 17, 14], 'climate': 'Mediterranean'},
+            'INDIANAPOLIS': {'temps': [-2, 1, 7, 14, 20, 25, 27, 26, 22, 15, 8, 1], 'climate': 'Continental'},
+            'GAINESVILLE': {'temps': [11, 14, 18, 22, 26, 29, 31, 31, 29, 24, 18, 13], 'climate': 'Subtropical'},
+            'KNOXVILLE': {'temps': [3, 6, 11, 16, 21, 26, 28, 27, 23, 17, 11, 5], 'climate': 'Subtropical'},
+            'DOHA': {'temps': [18, 20, 25, 30, 36, 41, 42, 41, 38, 32, 26, 20], 'climate': 'Desert'}
+        }
+        
+        # Temperature categorization function (same as transform stage)
+        def categorize_temperature(temp):
+            if temp < 10: return 'Cold'
+            elif temp < 18: return 'Cool'
+            elif temp < 24: return 'Moderate'
+            elif temp < 30: return 'Warm'
+            else: return 'Hot'
+        
+        # Generate estimates for missing cities
+        estimates = []
+        for city in missing_cities:
+            if city in city_climate_estimates:
+                city_data = city_climate_estimates[city]
+                temps = city_data['temps']
+                climate = city_data['climate']
+                
+                for month_idx, temp in enumerate(temps, 1):
+                    month_name = calendar.month_name[month_idx]
+                    estimates.append({
+                        'venue_name': city,
+                        'month': month_idx,
+                        'temperature': temp,
+                        'temperature_category': categorize_temperature(temp),
+                        'month_name': month_name,
+                        'season_category': get_season(month_idx),
+                        'has_actual_data': False,
+                        'weather_source': f'Athletics_Estimate_{climate}'
+                    })
+        
+        if estimates:
+            estimates_df = pd.DataFrame(estimates)
+            df = pd.concat([df, estimates_df], ignore_index=True)
+            logger.info(f"Added {len(estimates)} weather estimate records for {len(set(est['venue_name'] for est in estimates))} cities")
 
+    # Select final columns
     final = df[['venue_name', 'month_name', 'temperature',
                 'temperature_category', 'season_category',
                 'has_actual_data', 'weather_source']]
     
+    logger.info(f"Final weather data: {len(final)} records for {final['venue_name'].nunique()} cities")
 
+    # Save to database
     with engine.connect() as conn:
        final.to_sql('weather_conditions', conn, schema='reconciled', if_exists='append', index=False)
        conn.commit()
 
-    logger.info(f"Inserted {len(final)} weather records.")
+    logger.info(f"Inserted {len(final)} weather records")
     return final
 
 
 
-def reconcile_competitions(engine):
-    logger.info("Creating simple default competition...")
-    
-    # Create just ONE default competition for all performances, we don't really need to know in what occasion a result has been scored
-    competition_data = [{
-        'competition_name': 'Athletics Competition',
-        'competition_type': 'General Meeting', 
-        'competition_level': 'Professional',
-        'prestige_level': 3,
-        'is_indoor': False
-    }]
-    
-    df = pd.DataFrame(competition_data)
-    
-    with engine.connect() as conn:
-        df.to_sql('competitions', conn, schema='reconciled', if_exists='append', index=False)
-        conn.commit()
-    
-    logger.info("Inserted default competition.")
-    return df
-
-
-
 def reconcile_venues(engine):
-    """Simplified version without fuzzy matching dependencies"""
-    logger.info("Reconciling venues...")
+    """
+    Reconcile venues with comprehensive city extraction based on actual venue patterns
+    """
+    logger.info("Reconciling venues with comprehensive city extraction...")
     
-    # Country code mappings (3-letter to 2-letter)
-    country_mapping = {
-        'ITA': 'IT', 'FRA': 'FR', 'GER': 'DE', 'GBR': 'GB', 'USA': 'US',
-        'SUI': 'CH', 'NOR': 'NO', 'FIN': 'FI', 'BEL': 'BE', 'RUS': 'RU',
-        'ESP': 'ES', 'NED': 'NL', 'AUT': 'AT', 'SWE': 'SE', 'POL': 'PL',
-        'CZE': 'CZ', 'DEN': 'DK', 'POR': 'PT', 'GRE': 'GR', 'HUN': 'HU',
-        'CRO': 'HR', 'UKR': 'UA', 'CAN': 'CA', 'AUS': 'AU', 'JPN': 'JP'
+    def extract_location_from_venue(venue_name):
+        """Extract city and country from venue name patterns"""
+        if pd.isna(venue_name):
+            return {'city': 'Unknown', 'country_2': 'XX'}
+        
+        venue_str = str(venue_name).strip()
+        import re
+        
+        # Extract country code from parentheses
+        country_match = re.search(r'\(([A-Z]{3})\)', venue_str)
+        country_3 = country_match.group(1) if country_match else 'Unknown'
+        
+        # Map 3-letter to 2-letter country codes
+        country_mapping = {
+            'USA': 'US', 'GBR': 'GB', 'GER': 'DE', 'FRA': 'FR', 'ITA': 'IT',
+            'SUI': 'CH', 'BEL': 'BE', 'SWE': 'SE', 'FIN': 'FI', 'GRE': 'GR',
+            'CHN': 'CN', 'JAM': 'JM', 'CUB': 'CU', 'MON': 'MC', 'RUS': 'RU',
+            'NED': 'NL', 'ESP': 'ES', 'JPN': 'JP', 'HUN': 'HU', 'AUT': 'AT',
+            'POL': 'PL', 'CZE': 'CZ', 'BRA': 'BR', 'QAT': 'QA', 'UKR': 'UA',
+            'AUS': 'AU', 'CRO': 'HR', 'ROU': 'RO', 'BUL': 'BG', 'KOR': 'KR',
+            'BLR': 'BY', 'URS': 'RU', 'NOR': 'NO'
+        }
+        country_2 = country_mapping.get(country_3, country_3[:2] if len(country_3) >= 2 else 'XX')
+        
+        # PATTERN 1: "City, STATE (COUNTRY)" → Extract city, ignore state
+        # Example: "Sacramento, CA (USA)" → "Sacramento"
+        pattern1 = re.search(r'^([A-Za-z\s]+),\s*[A-Z]{2}\s*\([A-Z]{3}\)$', venue_str)
+        if pattern1:
+            city = pattern1.group(1).strip()
+            return {'city': city, 'country_2': country_2}
+        
+        # PATTERN 2: "Stadium, City, STATE (COUNTRY)" → Extract city from middle
+        # Example: "Drake Stadium, Des Moines, IA (USA)" → "Des Moines"
+        pattern2 = re.search(r'^[^,]+,\s*([A-Za-z\s]+),\s*[A-Z]{2}\s*\([A-Z]{3}\)$', venue_str)
+        if pattern2:
+            city = pattern2.group(1).strip()
+            return {'city': city, 'country_2': country_2}
+        
+        # PATTERN 3: "Stadium, City (COUNTRY)" → Extract city after first comma
+        # Example: "Olympiastadion, Berlin (GER)" → "Berlin"
+        pattern3 = re.search(r'^[^,]+,\s*([^,()]+?)\s*\([A-Z]{3}\)$', venue_str)
+        if pattern3:
+            city = pattern3.group(1).strip()
+            return {'city': city, 'country_2': country_2}
+        
+        # PATTERN 4: "City (COUNTRY)" → Direct extraction
+        # Example: "Paris (FRA)" → "Paris"
+        pattern4 = re.search(r'^([^,()]+?)\s*\([A-Z]{3}\)$', venue_str)
+        if pattern4:
+            city = pattern4.group(1).strip()
+            return {'city': city, 'country_2': country_2}
+        
+        # PATTERN 5: Special cases
+        special_cases = {
+            'Paris-St-Denis': 'Paris',
+            "Villeneuve d'Ascq": 'Lille',
+            'Adler, Sochi': 'Sochi',
+            'DS, Daegu': 'Daegu',
+            'La Cartuja, Sevilla': 'Sevilla'
+        }
+        
+        for special, city in special_cases.items():
+            if special in venue_str:
+                return {'city': city, 'country_2': country_2}
+        
+        return {'city': 'Unknown', 'country_2': country_2}
+    
+    # Standardize city names for better matching with weather data
+    city_standardization = {
+        'ROMA': 'ROME', 'ATHINA': 'ATHENS', 'BRUXELLES': 'BRUSSELS',
+        'LA HABANA': 'HAVANA', 'ZÜRICH': 'ZURICH', 'MÜNCHEN': 'MUNICH',
+        'MOSKVA': 'MOSCOW', 'BUCUREŞTI': 'BUCHAREST', 'PRAHA': 'PRAGUE',
+        'WARSZAWA': 'WARSAW', 'GÖTEBORG': 'GOTHENBURG', 'KÖLN': 'COLOGNE',
+        #'PALO ALTO': 'SAN FRANCISCO',  # Bay Area
+        #'WALNUT': 'LOS ANGELES',      # LA Area
+        #'TULA': 'MOSCOW',             # Near Moscow
+        #'RIETI': 'ROME',              # Near Rome
+        #'HEUSDEN-ZOLDER': 'BRUSSELS', # Near Brussels
+        #'HENGELO': 'AMSTERDAM'        # Netherlands
     }
     
-    # City name mappings for common variations
-    city_mapping = {
-        'ROMA': 'ROME', 'MÜNCHEN': 'MUNICH', 'WIEN': 'VIENNA',
-        'FIRENZE': 'FLORENCE', 'VENEZIA': 'VENICE', 'NAPOLI': 'NAPLES',
-        'TORINO': 'TURIN', 'BRUXELLES': 'BRUSSELS', 'ZÜRICH': 'ZURICH',
-        'KÖLN': 'COLOGNE', 'LISBOA': 'LISBON'
-    }
-    
-    # Get venues and extract cities using improved Python logic
+    # Get all venues from athletics data
     venues_query = """
     SELECT DISTINCT venue_name
     FROM staging.clean_world_athletics
@@ -349,51 +501,15 @@ def reconcile_venues(engine):
     with engine.connect() as conn:
         venues_df = pd.read_sql(text(venues_query), conn)
     
-    # Extract location info with improved logic
-    def extract_location_improved(venue_name):
-        if pd.isna(venue_name):
-            return {'city': 'Unknown', 'country_2': 'XX'}
-        
-        venue_str = str(venue_name).strip()
-        
-        # Extract country code from parentheses
-        import re
-        country_match = re.search(r'\(([A-Z]{2,3})\)', venue_str)
-        country_3 = country_match.group(1) if country_match else 'Unknown'
-        country_2 = country_mapping.get(country_3, country_3[:2] if len(country_3) >= 2 else 'XX')
-        
-        # Remove country part for city extraction
-        venue_clean = re.sub(r'\s*\([^)]+\)', '', venue_str).strip()
-        
-        # Extract city
-        if ',' in venue_clean:
-            parts = venue_clean.split(',')
-            # Get the last meaningful part (skip state abbreviations)
-            for part in reversed(parts):
-                part = part.strip()
-                if len(part) > 2 and not re.match(r'^[A-Z]{2}$', part):
-                    city = part
-                    break
-            else:
-                city = parts[-1].strip()
-        else:
-            city = venue_clean
-            # Remove stadium words
-            stadium_words = ['stadium', 'stadion', 'stadio', 'field', 'arena', 'track']
-            for word in stadium_words:
-                city = re.sub(rf'\b{word}\b', '', city, flags=re.IGNORECASE).strip()
-        
-        # Apply city name mapping
-        city_upper = city.upper()
-        city_mapped = city_mapping.get(city_upper, city_upper)
-        
-        return {'city': city_mapped, 'country_2': country_2}
-    
-    location_info = venues_df['venue_name'].apply(extract_location_improved)
+    # Extract city and country from each venue
+    location_info = venues_df['venue_name'].apply(extract_location_from_venue)
     venues_df['city_extracted'] = [info['city'] for info in location_info]
     venues_df['country_extracted'] = [info['country_2'] for info in location_info]
     
-    # Get cities from database
+    # Standardize city names
+    venues_df['city_standardized'] = venues_df['city_extracted'].str.upper().map(city_standardization).fillna(venues_df['city_extracted'].str.upper())
+    
+    # Get geographic data from cities database
     cities_query = """
     SELECT city_name, country_name, latitude, longitude, altitude, altitude_category
     FROM staging.clean_cities
@@ -403,32 +519,38 @@ def reconcile_venues(engine):
     with engine.connect() as conn:
         cities_df = pd.read_sql(text(cities_query), conn)
     
-    logger.info(f"Found {len(venues_df)} venues and {len(cities_df)} cities")
-    
-    # Prepare for matching with case normalization
-    venues_df['city_clean'] = venues_df['city_extracted'].str.strip().str.upper()
+    # Prepare for geographic matching
+    venues_df['city_clean'] = venues_df['city_standardized'].str.strip().str.upper()
     venues_df['country_clean'] = venues_df['country_extracted'].str.strip().str.upper()
     cities_df['city_clean'] = cities_df['city_name'].str.strip().str.upper()
     cities_df['country_clean'] = cities_df['country_name'].str.strip().str.upper()
     
-    # Perform the merge
-    merged_df = venues_df.merge(
-        cities_df,
-        left_on=['city_clean', 'country_clean'],
-        right_on=['city_clean', 'country_clean'],
-        how='left'
-    )
+    # Try to match with geographic database
+    # Strategy 1: City + Country match
+    merged_df = venues_df.merge(cities_df, on=['city_clean', 'country_clean'], how='left')
     
-    # Clean up the results
+    # Strategy 2: City-only match for unmatched venues
+    unmatched = merged_df['latitude'].isna()
+    if unmatched.sum() > 0:
+        logger.info(f"Applying city-only matching for {unmatched.sum()} venues...")
+        city_fallback = merged_df[unmatched].drop(columns=['city_name', 'country_name', 'latitude', 'longitude', 'altitude', 'altitude_category']).merge(
+            cities_df[['city_clean', 'city_name', 'country_name', 'latitude', 'longitude', 'altitude', 'altitude_category']].drop_duplicates(subset=['city_clean'], keep='first'),
+            on='city_clean', how='left'
+        )
+        
+        for col in ['city_name', 'country_name', 'latitude', 'longitude', 'altitude', 'altitude_category']:
+            merged_df.loc[unmatched, col] = city_fallback[col].values
+    
+    # Clean up final data
     merged_df['venue_name_clean'] = merged_df['venue_name'].str.strip().str.title()
-    merged_df['city_name'] = merged_df['city_name'].fillna(merged_df['city_extracted']).str.title()
+    merged_df['city_name'] = merged_df['city_name'].fillna(merged_df['city_standardized']).str.title()
     merged_df['country_name'] = merged_df['country_name'].fillna(merged_df['country_extracted']).str.upper()
-    merged_df['country_code'] = merged_df['country_name'].fillna(merged_df['country_extracted']).str.upper()
+    merged_df['country_code'] = merged_df['country_extracted']
     
     # Remove duplicates
     merged_df = merged_df.drop_duplicates(subset='venue_name', keep='first')
     
-    # Climate categorization
+    # Add climate zone and data quality
     def determine_climate(lat):
         if pd.isna(lat): return 'Unknown'
         abs_lat = abs(lat)
@@ -438,19 +560,19 @@ def reconcile_venues(engine):
         else: return 'Polar'
     
     merged_df['climate_zone'] = merged_df['latitude'].apply(determine_climate)
-    merged_df['geographic_source'] = 'Venue_Parsing_Plus_GeoNames_Elevation'
-    
-    # Data quality scoring
+    merged_df['geographic_source'] = 'Comprehensive_Venue_Analysis'
     merged_df['data_quality_score'] = merged_df.apply(
         lambda row: 9 if (pd.notna(row['latitude']) and pd.notna(row['altitude'])) 
-                   else 7 if pd.notna(row['latitude'])
-                   else 5, axis=1
+                   else 7 if pd.notna(row['latitude']) else 5, axis=1
     )
     
-    # Report statistics
+    # Statistics
     total_venues = len(merged_df)
-    matched_venues = len(merged_df[pd.notna(merged_df['latitude'])])
-    logger.info(f"Matching results: {matched_venues}/{total_venues} venues matched ({matched_venues/total_venues*100:.1f}%)")
+    city_extraction_success = len(merged_df[merged_df['city_extracted'] != 'Unknown'])
+    geographic_match_success = len(merged_df[pd.notna(merged_df['latitude'])])
+    
+    logger.info(f"City extraction: {city_extraction_success}/{total_venues} ({city_extraction_success/total_venues*100:.1f}%)")
+    logger.info(f"Geographic matching: {geographic_match_success}/{total_venues} ({geographic_match_success/total_venues*100:.1f}%)")
     
     # Select final columns
     final_venues = merged_df[[
@@ -530,8 +652,138 @@ def reconcile_performances(engine):
 
 
     # FIXED WEATHER JOIN: Match city from venue + month from performance date
-    df = df.merge(weather, on=['city_name', 'month_name'], how='left')
-    logger.info(f"STEP 5 - After weather join: {len(df)} records")
+    #df = df.merge(weather, on=['city_name', 'month_name'], how='left')
+    
+    # # IMPROVED: Better city name matching
+    # def match_city_names(venue_city, weather_cities):
+    #     """Find best weather city match for venue city"""
+    #     if pd.isna(venue_city):
+    #         return None
+    
+    #     venue_clean = str(venue_city).strip().upper()
+    
+    #     # Direct match
+    #     for weather_city in weather_cities:
+    #         if str(weather_city).strip().upper() == venue_clean:
+    #             return weather_city
+    
+    #     # Partial match (city contained in venue name)
+    #     for weather_city in weather_cities:
+    #         weather_clean = str(weather_city).strip().upper()
+    #         if venue_clean in weather_clean or weather_clean in venue_clean:
+    #             return weather_city
+    
+    #     return None
+
+    # # Get available weather cities
+    # weather_cities = weather['city_name'].unique()
+
+    # # Add matched city column
+    # df['weather_city_match'] = df['city_name'].apply(
+    #     lambda x: match_city_names(x, weather_cities)
+    # )
+
+    # # Join using matched cities
+    # df = df.merge(
+    #     weather, 
+    #     left_on=['weather_city_match', 'month_name'],
+    #     right_on=['city_name', 'month_name'], 
+    #     how='left'
+    # )
+
+    # OPTIMIZED WEATHER MATCHING - Vectorized approach
+    logger.info("Creating optimized weather matching lookup tables...")
+    
+    # Step 1: Create standardized city names for both datasets
+    def standardize_city_name(city):
+        if pd.isna(city):
+            return 'UNKNOWN'
+        return str(city).strip().upper().replace(' ', '').replace('-', '').replace('.', '')
+    
+    # Apply standardization
+    df['city_standardized'] = df['city_name'].apply(standardize_city_name)
+    weather['city_standardized'] = weather['city_name'].apply(standardize_city_name)
+    
+    # Step 2: Create lookup table with exact matches first
+    logger.info("Building exact match lookup table...")
+    exact_lookup = weather.set_index(['city_standardized', 'month_name'])['weather_key'].to_dict()
+    
+    # Step 3: Apply exact matches (very fast)
+    def get_exact_weather_match(row):
+        key = (row['city_standardized'], row['month_name'])
+        return exact_lookup.get(key, None)
+    
+    df['weather_key_exact'] = df.apply(get_exact_weather_match, axis=1)
+    exact_matches = df['weather_key_exact'].notna().sum()
+    logger.info(f"Exact matches: {exact_matches}/{len(df)} ({exact_matches/len(df)*100:.1f}%)")
+    
+    # Step 4: For unmatched records, create similarity lookup table
+    unmatched_df = df[df['weather_key_exact'].isna()].copy()
+    logger.info(f"Creating similarity matches for {len(unmatched_df)} unmatched records...")
+    
+    if len(unmatched_df) > 0:
+        # Create a smaller lookup for just the unique unmatched city/month combinations
+        unique_unmatched = unmatched_df[['city_standardized', 'month_name']].drop_duplicates()
+        logger.info(f"Only {len(unique_unmatched)} unique city/month combinations need similarity matching")
+        
+        # Build similarity lookup table only for unique combinations
+        similarity_lookup = {}
+        weather_cities = weather['city_standardized'].unique()
+        
+        for _, row in unique_unmatched.iterrows():
+            city = row['city_standardized']
+            month = row['month_name']
+            
+            # Find best similarity match
+            best_match = None
+            best_score = 0
+            
+            # Get all weather cities for this month
+            month_weather = weather[weather['month_name'] == month]
+            
+            if not month_weather.empty:
+                for weather_city in month_weather['city_standardized'].unique():
+                    # Calculate similarity score
+                    if city == weather_city:
+                        score = 100
+                    elif city in weather_city or weather_city in city:
+                        score = 90
+                    else:
+                        # Simple Jaccard similarity
+                        city_chars = set(city)
+                        weather_chars = set(weather_city)
+                        if city_chars and weather_chars:
+                            intersection = city_chars.intersection(weather_chars)
+                            union = city_chars.union(weather_chars)
+                            score = len(intersection) / len(union) * 80
+                        else:
+                            score = 0
+                    
+                    if score > best_score and score >= 60:  # 60% threshold
+                        best_score = score
+                        # Get the weather_key for this city/month combination
+                        weather_key = month_weather[month_weather['city_standardized'] == weather_city]['weather_key'].iloc[0]
+                        best_match = weather_key
+            
+            similarity_lookup[(city, month)] = best_match
+        
+        # Apply similarity matches
+        def get_similarity_weather_match(row):
+            if pd.notna(row['weather_key_exact']):
+                return row['weather_key_exact']
+            key = (row['city_standardized'], row['month_name'])
+            return similarity_lookup.get(key, 1)  # Default to weather_key=1
+        
+        df['weather_key'] = df.apply(get_similarity_weather_match, axis=1)
+        
+        similarity_matches = (df['weather_key'] != 1).sum() - exact_matches
+        logger.info(f"Similarity matches: {similarity_matches} additional matches")
+    else:
+        df['weather_key'] = df['weather_key_exact'].fillna(1)
+    
+    total_matches = (df['weather_key'] != 1).sum()
+    logger.info(f"Total weather matching success: {total_matches}/{len(df)} ({total_matches/len(df)*100:.1f}%)")
+    logger.info(f"STEP 5 - After optimized weather join: {len(df)} records")
     
     # Assign all performances to the single default competition
     df['competition_key'] = 1
@@ -549,7 +801,7 @@ def reconcile_performances(engine):
     df['created_date'] = pd.Timestamp.now()
 
     # Select final columns
-    final = df[['athlete_key', 'event_key', 'venue_key', 'weather_key', 'competition_key',
+    final = df[['athlete_key', 'event_key', 'venue_key', 'weather_key',
                 'competition_date', 'result_value', 'wind_reading', 'position_finish',
                 'data_source', 'data_quality_score', 'created_date']]
 
@@ -558,7 +810,6 @@ def reconcile_performances(engine):
     final['event_key'] = final['event_key'].astype(int) 
     final['venue_key'] = final['venue_key'].astype(int)
     final['weather_key'] = final['weather_key'].astype(int)
-    final['competition_key'] = final['competition_key'].astype(int)
 
     logger.info(f"Final performance records ready for insert: {len(final)}")
     logger.info(f"Weather match success: {(final['weather_key'] != 1).sum()}/{len(final)} performances have weather data")
@@ -624,7 +875,7 @@ def ultra_fast_postgres_append(df, table_name, engine, schema='reconciled'):
 
 def clear_reconciled_tables(engine):
     """Clear existing data before re-loading"""
-    tables = ['performances', 'weather_conditions', 'competitions', 'venues', 'events', 'athletes']
+    tables = ['performances', 'weather_conditions', 'venues', 'events', 'athletes']
     
     with engine.connect() as conn:
         for table in tables:
@@ -646,12 +897,11 @@ def main():
         reconcile_events(engine)
         reconcile_venues(engine)
         reconcile_weather(engine)
-        reconcile_competitions(engine)
         reconcile_performances(engine)
 
         # Count queries
         with engine.connect() as conn:
-            tables = ['athletes', 'events', 'venues', 'weather_conditions', 'competitions', 'performances']
+            tables = ['athletes', 'events', 'venues', 'weather_conditions', 'performances']
             for table in tables:
                 count = conn.execute(text(f"SELECT COUNT(*) FROM reconciled.{table}")).scalar()
                 logger.info(f"reconciled.{table}: {count} records")

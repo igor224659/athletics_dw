@@ -9,8 +9,7 @@ CREATE TABLE dwh.fact_performance (
     venue_key INT REFERENCES dwh.dim_venue(venue_key),
     date_key INT REFERENCES dwh.dim_date(date_key),
     weather_key INT REFERENCES dwh.dim_weather(weather_key),
-    -- competition_key INT REFERENCES dwh.dim_competition(competition_key),
-    -- NOTE: competition_key REMOVED for simplification
+
 
     gender VARCHAR(3),
     
@@ -72,8 +71,6 @@ CREATE INDEX idx_fact_temporal_trends ON dwh.fact_performance(date_key, event_ke
 -- Weather impact: weather + event
 CREATE INDEX idx_fact_weather_impact ON dwh.fact_performance(weather_key, event_key);
 
--- Competition quality analysis: competition + performance flags
--- CREATE INDEX idx_fact_competition_quality ON dwh.fact_performance(competition_key, is_championship_performance);
 
 
 COMMENT ON TABLE dwh.fact_performance IS 'Athletic performances with environmental context - Grain: One performance per athlete/event/venue/date/competition';

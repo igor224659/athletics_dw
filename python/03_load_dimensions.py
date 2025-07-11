@@ -51,9 +51,7 @@ def load_date_dimension(engine):
     # Remove duplicates and rename
     df = df.drop_duplicates(subset=['full_date'])
 
-    df['competition_level'] = None
-
-    final = df[['full_date', 'year', 'season', 'competition_level', 'is_championship_year', 'decade', 'month_name', 'quarter']]
+    final = df[['full_date', 'year', 'season', 'is_championship_year', 'decade', 'month_name', 'quarter']]
 
     with engine.connect() as conn:
         final.to_sql('dim_date', conn, schema='dwh', if_exists='append', index=False)
@@ -142,23 +140,6 @@ def load_venue_dimension(engine):
 
 
 
-def load_competition_dimension(engine):
-    logger.info("Loading competition dimension from reconciled.competitions...")
-
-    with engine.connect() as conn:
-        df = pd.read_sql(text("SELECT * FROM reconciled.competitions"), conn)
-
-    final = df[['competition_name', 'competition_type', 'competition_level',
-                'prestige_level', 'is_indoor']]
-
-    with engine.connect() as conn:
-        final.to_sql('dim_competition', conn, schema='dwh', if_exists='append', index=False)
-        conn.commit()
-
-    logger.info(f"Competition dimension loaded: {len(final)} records")
-
-
-
 def load_weather_dimension(engine):
     logger.info("Loading weather dimension from reconciled.weather_conditions...")
 
@@ -178,7 +159,7 @@ def load_weather_dimension(engine):
 
 def clear_dwh_tables(engine):
     """Clear existing data before re-loading"""
-    tables = ['dim_athlete', 'dim_competition', 'dim_date', 'dim_event', 'dim_venue', 'dim_weather']
+    tables = ['dim_athlete', 'dim_date', 'dim_event', 'dim_venue', 'dim_weather']
     
     with engine.connect() as conn:
         for table in tables:
@@ -200,12 +181,11 @@ def main():
         load_athlete_dimension(engine)
         load_event_dimension(engine)
         load_venue_dimension(engine)
-        load_competition_dimension(engine)
         load_weather_dimension(engine)
 
         # Count queries
         with engine.connect() as conn:
-            tables = ['dim_athlete', 'dim_competition', 'dim_date', 'dim_event', 'dim_venue', 'dim_weather']
+            tables = ['dim_athlete', 'dim_date', 'dim_event', 'dim_venue', 'dim_weather']
             for table in tables:
                 count = conn.execute(text(f"SELECT COUNT(*) FROM dwh.{table}")).scalar()
                 logger.info(f"dwh.{table}: {count} records")

@@ -21,79 +21,6 @@ def create_db_connection():
 
 
 
-# def clean_world_athletics_data(engine):
-#     """Clean and standardize World Athletics data"""
-#     try:
-#         logger.info("Cleaning World Athletics data...")
-        
-#         with engine.connect() as conn:
-#             df = pd.read_sql(text("SELECT * FROM staging.raw_world_athletics"), conn)
-        
-#         logger.info(f"Original records: {len(df)}")
-#         logger.info(f"Columns: {list(df.columns)}")
-        
-#         # Standardize column names
-#         column_mapping = {
-#             'Competitor': 'athlete_name',  
-#             'Event': 'event_name',
-#             # 'Mark': 'result_value',       
-#             'Venue': 'venue_name',
-#             'Date': 'competition_date',
-#             'Nat': 'nationality',         
-#             'Sex': 'gender',               
-#             'DOB': 'date_of_birth',        
-#             'Rank': 'rank_position',      
-#             'Wind': 'wind_reading'         
-#         }
-        
-#         # Rename columns if they exist
-#         for old_col, new_col in column_mapping.items():
-#             if old_col in df.columns:
-#                 df = df.rename(columns={old_col: new_col})
-        
-#         # Data cleaning
-#         # Remove null essential fields
-#         initial_count = len(df)
-#         df = df.dropna(subset=['athlete_name', 'event_name', 'result_value'])
-#         logger.info(f"After removing null essential fields: {len(df)} records (-{initial_count - len(df)})")
-        
-#         # Clean result values
-#         df = clean_result_values(df)
-        
-#         # Standardize event names
-#         df = standardize_event_names(df)
-        
-#         # Clean athlete names
-#         logger.info("Cleaning athlete names...")
-#         df['athlete_name'] = df['athlete_name'].str.strip().str.upper()  
-
-#         # Clean venue names:
-#         if 'venue_name' in df.columns:
-#             logger.info("Cleaning venue names...")
-#             df['venue_name'] = df['venue_name'].str.strip().str.upper()
-            
-#         # Add competition level (if not present)
-#         if 'competition_level' not in df.columns:
-#             df['competition_level'] = 'Professional'  # Default value
-        
-#         # Add data source
-#         df['data_source'] = 'WorldAthletics'
-
-
-#         # Save cleaned data
-#         #with engine.connect() as conn:
-#             #df.to_sql('clean_world_athletics', conn, schema='staging', 
-#                      #if_exists='replace', index=False, method='multi')
-#         chunked_save_to_postgres(df, 'clean_world_athletics', engine) 
-                
-#         logger.info(f"Cleaned World Athletics data: {len(df)} records saved")
-#         return df
-        
-#     except Exception as e:
-#         logger.error(f"Failed to clean World Athletics data: {e}")
-#         raise
-
-
 def clean_world_athletics_data(engine):
     """Clean and standardize World Athletics data"""
     try:
@@ -458,7 +385,59 @@ def chunked_save_to_postgres(df, table_name, engine, schema='staging', chunk_siz
     logger.info(f"✓ {table_name} saved successfully")
 
 
+
+# def diagnose_weather_coverage_issues(engine):
+#     """Diagnose the root cause of poor weather coverage"""
+#     print("=== WEATHER COVERAGE DIAGNOSTIC ===")
+    
+#     with engine.connect() as conn:
+#         # 1. Check athletics venue cities (what we need)
+#         venue_cities_needed = pd.read_sql(text("""
+#             SELECT DISTINCT venue_name, 
+#                    COUNT(*) as performances_count
+#             FROM staging.clean_world_athletics 
+#             WHERE venue_name IS NOT NULL
+#             GROUP BY venue_name
+#             ORDER BY performances_count DESC
+#             LIMIT 20
+#         """), conn)
         
+#         print("TOP 20 ATHLETICS VENUES (what we need weather for):")
+#         print(venue_cities_needed)
+#         print()
+        
+#         # 2. Check available temperature cities (what we have)
+#         temp_cities_available = pd.read_sql(text("""
+#             SELECT DISTINCT "City",
+#                    COUNT(*) as temperature_records
+#             FROM staging.raw_temperature
+#             WHERE "City" IS NOT NULL
+#             GROUP BY "City"
+#             ORDER BY temperature_records DESC
+#             LIMIT 20
+#         """), conn)
+        
+#         print("TOP 20 TEMPERATURE CITIES (what we have):")
+#         print(temp_cities_available)
+#         print()
+        
+#         # 3. Check cleaned temperature data
+#         temp_cleaned = pd.read_sql(text("""
+#             SELECT DISTINCT "City",
+#                    COUNT(*) as monthly_records
+#             FROM staging.clean_temperature
+#             WHERE "City" IS NOT NULL
+#             GROUP BY "City"
+#             ORDER BY monthly_records DESC
+#             LIMIT 20
+#         """), conn)
+        
+#         print("TOP 20 CLEANED TEMPERATURE CITIES:")
+#         print(temp_cleaned)
+#         print()
+        
+
+
 def main():
     """Main transformation process"""
     try:
@@ -467,6 +446,8 @@ def main():
         # Create database connection
         engine = create_db_connection()
         
+        #diagnose_weather_coverage_issues(engine)
+
         # Clean and transform each dataset
         athletics_df = clean_world_athletics_data(engine)
         cities_df = integrate_geographic_data(engine)
@@ -486,3 +467,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

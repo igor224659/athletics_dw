@@ -53,15 +53,6 @@ CREATE TABLE dwh.dim_athlete (
     specialization VARCHAR(30) -- 'Sprinter', 'Distance', 'Jumper', 'Thrower'
 );
 
--- Competition Dimension
-CREATE TABLE dwh.dim_competition (
-    competition_key SERIAL PRIMARY KEY,
-    competition_name VARCHAR(100),
-    competition_type VARCHAR(30), -- 'World Championships', 'Diamond League', 'National', 'Regional'
-    competition_level VARCHAR(30), -- 'Elite', 'Professional', 'Amateur'
-    prestige_level INT, -- 5=World Championships, 4=Continental, 3=National, etc.
-    is_indoor BOOLEAN
-);
 
 -- Weather Dimension
 CREATE TABLE dwh.dim_weather (
@@ -84,7 +75,7 @@ CREATE INDEX idx_athlete_name ON dwh.dim_athlete(athlete_name);
 CREATE INDEX idx_athlete_nationality ON dwh.dim_athlete(nationality);
 CREATE INDEX idx_date_year ON dwh.dim_date(year);
 CREATE INDEX idx_date_season ON dwh.dim_date(season);
-CREATE INDEX idx_competition_level ON dwh.dim_competition(competition_level);
+--CREATE INDEX idx_competition_level ON dwh.dim_competition(competition_level);
 CREATE INDEX idx_weather_temp_category ON dwh.dim_weather(temperature_category);
 
 COMMENT ON SCHEMA dwh IS 'Data Warehouse schema for athletics performance analysis';
