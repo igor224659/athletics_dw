@@ -78,6 +78,17 @@ def reconcile_events(engine):
     with engine.connect() as conn:
         df = pd.read_sql(text(query), conn)
 
+
+    # Remove multi-events (Decathlon, Heptathlon)
+    logger.info("Filtering out multi-events...")
+    initial_count = len(df)
+
+    df = df[~df['event_name'].str.contains('(?i)(decathlon|heptathlon)', na=False)]
+
+    removed_count = initial_count - len(df)
+    logger.info(f"Removed {removed_count} multi-event records")
+
+
     def categorize(event):
         e = event.lower()
         # CHECK HURDLES FIRST - before checking distances
@@ -224,8 +235,24 @@ def reconcile_events(engine):
     df['measurement_unit'] = df['event_category'].apply(get_measurement_unit)
     df['distance_meters'] = df['event_name'].apply(extract_distance)
     
-    df['gender'] = 'Mixed' 
+
+    # Assign specific genders to hurdles events
+    def assign_gender(event_name):
+        if pd.isna(event_name):
+            return 'Mixed'
     
+        event_str = str(event_name).lower()
+    
+        if '110' in event_str and 'hurdles' in event_str or '30 Kilometres Race Walk' in event_str:
+            return 'M'  # Men's 110m Hurdles
+        elif '100' in event_str and 'hurdles' in event_str:
+            return 'F'  # Women's 100m Hurdles
+        else:
+            return 'Mixed'  # All other events
+
+    df['gender'] = df['event_name'].apply(assign_gender)    
+    
+
     df['world_record'] = None
 
     final = df[['event_name', 'event_name_standardized', 'event_group', 'event_category',
@@ -609,6 +636,8 @@ def reconcile_performances(engine):
     WHERE a.result_numeric IS NOT NULL
       AND a.athlete_name IS NOT NULL
       AND a.event_clean IS NOT NULL
+      AND a.event_clean NOT ILIKE '%decathlon%'
+    AND a.event_clean NOT ILIKE '%heptathlon%'
     """
     
     with engine.connect() as conn:
@@ -785,8 +814,26 @@ def reconcile_performances(engine):
     logger.info(f"Total weather matching success: {total_matches}/{len(df)} ({total_matches/len(df)*100:.1f}%)")
     logger.info(f"STEP 5 - After optimized weather join: {len(df)} records")
     
-    # Assign all performances to the single default competition
-    df['competition_key'] = 1
+
+    # Remove performances without weather data at reconciled layer
+    logger.info("Removing performances without weather data...")
+    
+    initial_count = len(df)
+    
+    # Keep only performances with actual weather matches (not default)
+    df_with_weather = df.dropna(subset=['weather_key'])
+    
+    removed_count = initial_count - len(df_with_weather)
+    removal_percentage = (removed_count / initial_count) * 100
+    
+    logger.info(f"Reconciled layer weather filter:")
+    logger.info(f"  Initial performances: {initial_count:,}")
+    logger.info(f"  Removed (no weather): {removed_count:,} ({removal_percentage:.1f}%)")
+    logger.info(f"  Reconciled with weather: {len(df_with_weather):,}")
+
+    # Update dataframe
+    df = df_with_weather
+
 
     # Data quality filtering
     logger.info(f"Before filtering: {len(df)} records")

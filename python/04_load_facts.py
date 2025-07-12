@@ -579,10 +579,14 @@ def load_fact_table(engine):
     perf['load_batch_id'] = 1
 
 
-    # Step 9: Handle missing dimension keys with defaults
-    perf['date_key'] = perf['date_key'].fillna(1)
-    perf['venue_key'] = perf['venue_key'].fillna(1)
-    perf['weather_key'] = perf['weather_key'].fillna(1)
+    # Remove performances with missing data directly
+    perf = perf.dropna(subset=['date_key'])
+    perf = perf.dropna(subset=['venue_key'])
+
+    # # Step 9: Handle missing dimension keys with defaults
+    # perf['date_key'] = perf['date_key'].fillna(1)
+    # perf['venue_key'] = perf['venue_key'].fillna(1)
+    # perf['weather_key'] = perf['weather_key'].fillna(1)
 
     # Rename to match schema
     perf['rank_position'] = perf['position_finish']
@@ -596,7 +600,6 @@ def load_fact_table(engine):
         'venue_key',        # WHERE
         'date_key',         # WHEN
         'weather_key',      # CONDITIONS
-        # NOTE: No competition_key - simplified!
         
         # Athlete Context
         'gender',
