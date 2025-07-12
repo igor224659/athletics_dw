@@ -10,6 +10,214 @@ logger = logging.getLogger(__name__)
 def create_db_connection():
     return create_engine(CONNECTION_STRING)
 
+# Realistic World Record Thresholds Used to filter out obviously fake performances
+REALISTIC_PERFORMANCE_THRESHOLDS = {
+    # Men's Events - Based on current world records with 5% buffer
+    'M': {
+        # Sprint Events (times in seconds)
+        '100 Metres': {'max_time': 11.0, 'min_time': 9.57},      # WR: 9.58, allows up to 11.0
+        '200 Metres': {'max_time': 22.0, 'min_time': 19.18},     # WR: 19.19
+        '400 Metres': {'max_time': 50.0, 'min_time': 43.02},     # WR: 43.03
+        '300 Metres': {'max_time': 35.0, 'min_time': 30.80},         # WR: ~30.81
+        '600 Metres': {'max_time': 80.0, 'min_time': 67.13},         # WR: ~67.14
+        '1000 Metres': {'max_time': 170.0, 'min_time': 131.95},      # WR: ~131.96
+        '2000 Metres': {'max_time': 360.0, 'min_time': 284.78},      # WR: ~284.79
+        '3000 Metres': {'max_time': 550.0, 'min_time': 422.75},      # WR: ~422.76
+        'Two Miles': {'max_time': 550.0, 'min_time': 472.66},        # WR: ~472.67
+        '3000 Metres Steeplechase': {'max_time': 600.0, 'min_time': 486.46}, # WR: 486.47
+        '5 Kilometres': {'max_time': 950.0, 'min_time': 756.0},     # WR: ~757 (road)
+        '10 Kilometres': {'max_time': 1900.0, 'min_time': 1576.0},  # WR: ~1577 (road)
+        '15 Kilometres': {'max_time': 3000.0, 'min_time': 2525.0},  # WR: ~2526
+        '20 Kilometres': {'max_time': 4000.0, 'min_time': 3377.0},  # WR: ~3378
+        'Half Marathon': {'max_time': 4500.0, 'min_time': 3668.0},  # WR: 3669 (58:01)
+        '10 Miles Road': {'max_time': 3200.0, 'min_time': 2707.0},  # WR: ~2708
+        '3000 Metres Race Walk': {'max_time': 900.0, 'min_time': 665.0},    # WR: ~666
+        '5000 Metres Race Walk': {'max_time': 1400.0, 'min_time': 1134.0},  # WR: ~1135
+        '10000 Metres Race Walk': {'max_time': 2700.0, 'min_time': 2316.0}, # WR: ~2317
+        '20000 Metres Race Walk': {'max_time': 5400.0, 'min_time': 4666.0}, # WR: ~4667
+        '5 Kilometres Race Walk': {'max_time': 1400.0, 'min_time': 1134.0}, # WR: ~1135
+        '10 Kilometres Race Walk': {'max_time': 2700.0, 'min_time': 2316.0}, # WR: ~2317
+        '20 Kilometres Race Walk': {'max_time': 5400.0, 'min_time': 4666.0}, # WR: ~4667
+        '30 Kilometres Race Walk': {'max_time': 8200.0, 'min_time': 7199.0}, # WR: ~7200
+        '35 Kilometres Race Walk': {'max_time': 9600.0, 'min_time': 8399.0}, # WR: ~8400
+        '50 Kilometres Race Walk': {'max_time': 14000.0, 'min_time': 12396.0}, # WR: ~12397
+        '800 Metres': {'max_time': 130.0, 'min_time': 100.90},    # WR: 100.91
+        '1500 Metres': {'max_time': 260.0, 'min_time': 205.99},  # WR: 206.00
+        'One Mile': {'max_time': 280.0, 'min_time': 223.12},     # WR: 223.13
+        '5000 Metres': {'max_time': 900.0, 'min_time': 757.34},  # WR: 757.35
+        '10000 Metres': {'max_time': 1800.0, 'min_time': 1577.52}, # WR: 1577.53
+        'Marathon': {'max_time': 9000.0, 'min_time': 7298.0},   # WR: 7299 (2:01:09)
+        '110 Metres Hurdles': {'max_time': 15.0, 'min_time': 12.79}, # WR: 12.80
+        '400 Metres Hurdles': {'max_time': 55.0, 'min_time': 45.93}, # WR: 45.94
+        'High Jump': {'max_distance': 2.46, 'min_distance': 1.5},     # WR: 2.45
+        'Long Jump': {'max_distance': 8.96, 'min_distance': 5.0},     # WR: 8.95
+        'Triple Jump': {'max_distance': 18.30, 'min_distance': 10.0}, # WR: 18.29
+        'Pole Vault': {'max_distance': 6.24, 'min_distance': 3.0},    # WR: 6.23
+        'Shot Put': {'max_distance': 23.38, 'min_distance': 8.0},     # WR: 23.37
+        'Discus Throw': {'max_distance': 74.09, 'min_distance': 30.0}, # WR: 74.08
+        'Hammer Throw': {'max_distance': 86.75, 'min_distance': 40.0}, # WR: 86.74
+        'Javelin Throw': {'max_distance': 98.49, 'min_distance': 40.0}, # WR: 98.48
+    },
+    
+    # Women's Events - Based on current world records with 5% buffer
+    'F': {
+        # Sprint Events (times in seconds)
+        '100 Metres': {'max_time': 12.0, 'min_time': 10.48},      # WR: 10.49
+        '200 Metres': {'max_time': 24.0, 'min_time': 21.33},     # WR: 21.34
+        '400 Metres': {'max_time': 55.0, 'min_time': 47.59},     # WR: 47.60
+        '300 Metres': {'max_time': 38.0, 'min_time': 34.13},         # WR: ~34.14
+        '600 Metres': {'max_time': 90.0, 'min_time': 73.24},         # WR: ~73.25
+        '1000 Metres': {'max_time': 185.0, 'min_time': 149.33},      # WR: ~149.34
+        '2000 Metres': {'max_time': 400.0, 'min_time': 318.57},      # WR: ~318.58
+        '3000 Metres': {'max_time': 620.0, 'min_time': 486.10},      # WR: ~486.11
+        'One Mile': {'max_time': 300.0, 'min_time': 252.55},         # WR: 252.56
+        'Two Miles': {'max_time': 620.0, 'min_time': 540.32},        # WR: ~540.33
+        '3000 Metres Steeplechase': {'max_time': 700.0, 'min_time': 558.77}, # WR: 558.78
+        '5 Kilometres': {'max_time': 1050.0, 'min_time': 850.0},    # WR: ~851 (road)
+        '10 Kilometres': {'max_time': 2150.0, 'min_time': 1771.0},  # WR: ~1772 (road)
+        '15 Kilometres': {'max_time': 3300.0, 'min_time': 2812.0},  # WR: ~2813
+        '20 Kilometres': {'max_time': 4500.0, 'min_time': 3899.0},  # WR: ~3900
+        'Half Marathon': {'max_time': 5100.0, 'min_time': 4078.0},  # WR: 4079 (1:04:39)
+        '10 Miles Road': {'max_time': 3600.0, 'min_time': 3049.0},  # WR: ~3050
+        '3000 Metres Race Walk': {'max_time': 1000.0, 'min_time': 749.0},   # WR: ~750
+        '5000 Metres Race Walk': {'max_time': 1600.0, 'min_time': 1288.0},  # WR: ~1289
+        '10000 Metres Race Walk': {'max_time': 3200.0, 'min_time': 2643.0}, # WR: ~2644
+        '20000 Metres Race Walk': {'max_time': 6500.0, 'min_time': 5466.0}, # WR: ~5467
+        '5 Kilometres Race Walk': {'max_time': 1600.0, 'min_time': 1288.0}, # WR: ~1289
+        '10 Kilometres Race Walk': {'max_time': 3200.0, 'min_time': 2643.0}, # WR: ~2644
+        '20 Kilometres Race Walk': {'max_time': 6500.0, 'min_time': 5466.0}, # WR: ~5467
+        '35 Kilometres Race Walk': {'max_time': 11500.0, 'min_time': 10199.0}, # WR: ~10200
+        '50 Kilometres Race Walk': {'max_time': 16500.0, 'min_time': 14413.0}, # WR: ~14414
+        '800 Metres': {'max_time': 140.0, 'min_time': 113.27},   # WR: 113.28
+        '1500 Metres': {'max_time': 280.0, 'min_time': 230.06},  # WR: 230.07
+        'One Mile': {'max_time': 300.0, 'min_time': 252.55},     # WR: 252.56
+        '5000 Metres': {'max_time': 1000.0, 'min_time': 851.14}, # WR: 851.15
+        '10000 Metres': {'max_time': 2100.0, 'min_time': 1771.77}, # WR: 1771.78
+        'Marathon': {'max_time': 10800.0, 'min_time': 8168},  # WR: 8169 (2:14:04)
+        '100 Metres Hurdles': {'max_time': 15.0, 'min_time': 12.19}, # WR: 12.20
+        '400 Metres Hurdles': {'max_time': 60.0, 'min_time': 50.67}, # WR: 50.68
+        'High Jump': {'max_distance': 2.10, 'min_distance': 1.3},     # WR: 2.09
+        'Long Jump': {'max_distance': 7.53, 'min_distance': 4.5},     # WR: 7.52
+        'Triple Jump': {'max_distance': 15.75, 'min_distance': 9.0},  # WR: 15.74
+        'Pole Vault': {'max_distance': 5.07, 'min_distance': 2.5},    # WR: 5.06
+        'Shot Put': {'max_distance': 22.64, 'min_distance': 7.0},     # WR: 22.63 (4kg)
+        'Discus Throw': {'max_distance': 76.81, 'min_distance': 25.0}, # WR: 76.80 (1kg)
+        'Hammer Throw': {'max_distance': 82.99, 'min_distance': 35.0}, # WR: 82.98 (4kg)
+        'Javelin Throw': {'max_distance': 72.29, 'min_distance': 25.0}, # WR: 72.28 (600g)
+    }
+}
+
+def is_realistic_performance(result_value, event_name, measurement_unit, gender):
+    """
+    Check if a performance result is realistic based on world record thresholds
+    """
+    try:
+        if pd.isna(result_value) or pd.isna(event_name) or result_value <= 0:
+            return False
+        
+        # Normalize gender
+        gender_key = 'M' if str(gender).upper() in ['M', 'MALE', 'MEN'] else 'F'
+        
+        # Clean event name for matching
+        event_str = str(event_name).strip()
+        
+        # Get thresholds for this gender and event
+        if gender_key not in REALISTIC_PERFORMANCE_THRESHOLDS:
+            return True  # If no gender info, don't filter
+        
+        gender_thresholds = REALISTIC_PERFORMANCE_THRESHOLDS[gender_key]
+        
+        # Find matching event thresholds
+        event_thresholds = None
+        
+        # Exact match first
+        if event_str in gender_thresholds:
+            event_thresholds = gender_thresholds[event_str]
+        else:
+            # Partial match for event variations
+            for threshold_event, thresholds in gender_thresholds.items():
+                if threshold_event.lower() in event_str.lower() or event_str.lower() in threshold_event.lower():
+                    event_thresholds = thresholds
+                    break
+        
+        if not event_thresholds:
+            return True  # If no thresholds found, don't filter (conservative approach)
+        
+        # Apply thresholds based on measurement unit
+        if measurement_unit == 'seconds':
+            # For time events: check if time is within realistic range
+            max_time = event_thresholds.get('max_time')
+            min_time = event_thresholds.get('min_time')
+            
+            if max_time and result_value > max_time:
+                return False  # Too slow
+            if min_time and result_value < min_time:
+                return False  # Too fast (impossible)
+                
+        else:  # meters
+            # For distance/height events: check if distance is within realistic range
+            max_distance = event_thresholds.get('max_distance')
+            min_distance = event_thresholds.get('min_distance')
+            
+            if max_distance and result_value > max_distance:
+                return False  # Too far (impossible)
+            if min_distance and result_value < min_distance:
+                return False  # Too short (likely error)
+        
+        return True  # Performance passes all checks
+        
+    except Exception as e:
+        logger.warning(f"Error validating performance for {event_name} ({gender}): {e}")
+        return True  # Conservative: don't filter if validation fails
+
+
+def filter_performance_outliers(df):
+    """
+    Filter out unrealistic performances before calculating performance scores
+    """
+    logger.info("=== FILTERING PERFORMANCE OUTLIERS ===")
+    
+    initial_count = len(df)
+    
+    # Apply realistic performance filter
+    df['is_realistic'] = df.apply(
+        lambda row: is_realistic_performance(
+            row['result_value'], 
+            row['event_name'], 
+            row['measurement_unit'], 
+            row['gender']
+        ), axis=1
+    )
+    
+    # Separate realistic and outlier performances
+    realistic_df = df[df['is_realistic']].copy()
+    outliers_df = df[~df['is_realistic']].copy()
+    
+    # Log filtering results
+    outliers_count = len(outliers_df)
+    outliers_percentage = (outliers_count / initial_count) * 100
+    
+    logger.info(f"Initial performances: {initial_count:,}")
+    logger.info(f"Realistic performances: {len(realistic_df):,}")
+    logger.info(f"Filtered outliers: {outliers_count:,} ({outliers_percentage:.1f}%)")
+    
+    # Analyze outliers by event
+    if len(outliers_df) > 0:
+        outlier_analysis = outliers_df.groupby(['event_name', 'gender']).agg({
+            'result_value': ['count', 'min', 'max', 'mean']
+        }).round(3)
+        
+        logger.info("TOP OUTLIER EVENTS:")
+        for event_gender, stats in outlier_analysis.head(10).iterrows():
+            event_name, gender = event_gender
+            count = stats[('result_value', 'count')]
+            min_val = stats[('result_value', 'min')]
+            max_val = stats[('result_value', 'max')]
+            logger.info(f"  {event_name} ({gender}): {count} outliers, range: {min_val}-{max_val}")
+    
+    logger.info("======================================")
+    
+    return realistic_df.drop(columns=['is_realistic'])
 
 
 # World Athletics coefficients for scientific performance scoring
@@ -462,6 +670,9 @@ def load_fact_table(engine):
         venue_dim = pd.read_sql(text("""
             SELECT venue_key, venue_name, city_name, country_code, altitude, climate_zone
             FROM dwh.dim_venue
+            WHERE altitude IS NOT NULL 
+            AND altitude >= 0 
+            AND altitude <= 4000
         """), conn)
         
         # CONDITIONS - Weather
@@ -508,7 +719,7 @@ def load_fact_table(engine):
     # WHERE - Venue
     perf = perf.merge(
         venue_dim[['venue_key', 'venue_name', 'altitude', 'climate_zone']], 
-        on='venue_key', how='left'
+        on='venue_key', how='inner'  # INNER JOIN removes performances without altitude
     )
     
     # CONDITIONS - Weather
@@ -546,13 +757,25 @@ def load_fact_table(engine):
     logger.info(f"Filtered out {initial_count - len(perf)} records missing critical dimensions")
 
 
-    # Step 7: Calculate ALL measures
+    # Step 7: OUTLIER FILTERING - Remove fake/unrealistic performances
+    perf_filtered = filter_performance_outliers(perf)
+
+    outliers_removed = len(perf) - len(perf_filtered)
+    logger.info(f"Outlier filtering removed {outliers_removed} suspicious performances")
+
+    # Step 8: Final data quality filtering
+    initial_count = len(perf_filtered)
+    perf_filtered = perf_filtered.dropna(subset=['athlete_key', 'event_key', 'venue_key'])
+    logger.info(f"Filtered out {initial_count - len(perf_filtered)} records missing critical dimensions")
+
+    perf = perf_filtered
+
+
+    # Step 9: Calculate ALL measures
     logger.info("Calculating ALL performance measures...")
     
     # Core DFM measures
     logger.info("Calculating performance_score")
-    # perf['performance_score'] = perf.apply(lambda row:
-    #     calculate_performance_score(row['result_value'], row['event_name'], row['measurement_unit']), axis=1)
     perf['performance_score'] = perf.apply(lambda row:
         calculate_performance_score_enhanced(
             row['result_value'], 
@@ -571,7 +794,7 @@ def load_fact_table(engine):
         calculate_temperature_impact_factor(row['temperature'], row['event_name']), axis=1)
 
 
-    # Step 8: Add performance context flags (simplified without competition logic)
+    # Step 10: Add performance context flags (simplified without competition logic)
     logger.info("Adding performance context flags...")
     
     # Simplified championship detection
@@ -583,7 +806,7 @@ def load_fact_table(engine):
     perf = perf.dropna(subset=['date_key'])
     perf = perf.dropna(subset=['venue_key'])
 
-    # # Step 9: Handle missing dimension keys with defaults
+    # # Step 11: Handle missing dimension keys with defaults
     # perf['date_key'] = perf['date_key'].fillna(1)
     # perf['venue_key'] = perf['venue_key'].fillna(1)
     # perf['weather_key'] = perf['weather_key'].fillna(1)
@@ -592,7 +815,7 @@ def load_fact_table(engine):
     perf['rank_position'] = perf['position_finish']
 
 
-    # Step 10: Select final columns for fact table
+    # Step 12: Select final columns for fact table
     fact_cols = [
         # 5 ESSENTIAL FOREIGN KEYS
         'athlete_key',      # WHO
@@ -623,7 +846,7 @@ def load_fact_table(engine):
     final_df = perf[fact_cols].copy()
 
 
-    # Step 11: Simplified success summary
+    # Step 13: Simplified success summary
     logger.info("SIMPLIFIED FACT TABLE SUMMARY:")
     logger.info(f"Total performances: {len(final_df):,}")
     logger.info(f"Unique athletes: {final_df['athlete_key'].nunique():,}")
@@ -638,7 +861,7 @@ def load_fact_table(engine):
     logger.info(f"temperature_impact_factor: avg = {final_df['temperature_impact_factor'].mean():.3f}")
 
 
-    # Step 12: Load to database
+    # Step 14: Load to database
     logger.info(f"Loading {len(final_df)} records to dwh.fact_performance...")
     
     with engine.connect() as conn:
