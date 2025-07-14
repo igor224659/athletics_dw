@@ -67,6 +67,7 @@ def load_athlete_dimension(engine):
     # Use SQL aliases to rename columns cleanly
     query = """
     SELECT 
+        athlete_key,
         athlete_name_clean as athlete_name,
         nationality_standardized as nationality,
         nationality_code,
@@ -93,6 +94,7 @@ def load_event_dimension(engine):
     # Use SQL aliases to handle column renaming cleanly
     query = """
     SELECT 
+        event_key,
         event_name_standardized as event_name,
         event_category,
         event_group,
@@ -119,6 +121,7 @@ def load_venue_dimension(engine):
 
     query = """
     SELECT 
+        venue_key,
         venue_name_clean as venue_name,
         city_name,
         country_name,
@@ -146,7 +149,7 @@ def load_weather_dimension(engine):
     with engine.connect() as conn:
         df = pd.read_sql(text("SELECT * FROM reconciled.weather_conditions"), conn)
 
-    final = df[['venue_name', 'month_name', 'temperature',
+    final = df[['weather_key','venue_name', 'month_name', 'temperature',
                 'temperature_category', 'season_category', 'has_actual_data']]
 
     with engine.connect() as conn:
