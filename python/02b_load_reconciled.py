@@ -27,32 +27,74 @@ def reconcile_athletes(engine):
     
     with engine.connect() as conn:
         df = pd.read_sql(text(query), conn)
-    
-    df['athlete_name_clean'] = df['athlete_name'].str.strip().str.title()
-    df['nationality_standardized'] = df['nationality'].str.strip().str.title()
-    df['birth_decade'] = 'Unknown'
-    df['specialization'] = 'All-around'
-    df['data_quality_score'] = 8
-    df['source_system'] = df['data_source']
-    df['nationality_code'] = df['nationality'].str.upper().str[:3]
 
-    # FIX: Convert gender to single character
+
+    # STEP 1: Normalize athlete names for deduplication
+    def normalize_athlete_name(name):
+        """Normalize athlete names to catch duplicates"""
+        if pd.isna(name):
+            return None
+        
+        # Convert to uppercase and strip whitespace
+        normalized = str(name).upper().strip()
+        
+        # Remove multiple spaces
+        normalized = ' '.join(normalized.split())
+        
+        # Remove common punctuation variations
+        normalized = normalized.replace('.', '').replace(',', '').replace("'", '')
+        
+        # Remove common suffixes/titles
+        suffixes_to_remove = [' JR', ' SR', ' III', ' II', ' JUNIOR', ' SENIOR']
+        for suffix in suffixes_to_remove:
+            if normalized.endswith(suffix):
+                normalized = normalized[:-len(suffix)].strip()
+        
+        return normalized
+    
+    # Apply normalization
+    df['athlete_name_normalized'] = df['athlete_name'].apply(normalize_athlete_name)
+    
+    # STEP 2: Deduplicate athletes
+    # Sort to ensure we keep the most complete record (by nationality, then by source)
+    df_sorted = df.sort_values(
+        by=['athlete_name_normalized', 'nationality', 'data_source'],
+        na_position='last'
+    )
+    
+    # Keep first occurrence of each normalized name
+    df_dedup = df_sorted.drop_duplicates(subset=['athlete_name_normalized'], keep='first')
+    
+    logger.info(f"Deduplication: {len(df)} → {len(df_dedup)} athletes ({len(df) - len(df_dedup)} duplicates removed)")
+    
+
+    # STEP 3: Prepare final data
+    df_dedup['athlete_name_clean'] = df_dedup['athlete_name'].str.strip().str.title()
+    df_dedup['nationality_standardized'] = df_dedup['nationality'].str.strip().str.title()
+    df_dedup['birth_decade'] = 'Unknown'
+    df_dedup['specialization'] = 'All-around'
+    df_dedup['data_quality_score'] = 8
+    df_dedup['source_system'] = df_dedup['data_source']
+    df_dedup['nationality_code'] = df_dedup['nationality'].str.upper().str[:3]
+
+    # Normalize gender
     def normalize_gender(gender_val):
         if pd.isna(gender_val):
-            return 'U'  # Unknown
+            return 'U'
         gender_str = str(gender_val).lower().strip()
         if gender_str in ['female', 'f', 'w']:
             return 'F'
         elif gender_str in ['male', 'm']:
             return 'M'
         else:
-            return 'U'  # Unknown
+            return 'U'
     
-    df['gender_normalized'] = df['gender'].apply(normalize_gender)
+    df_dedup['gender_normalized'] = df_dedup['gender'].apply(normalize_gender)
 
-    final = df[['athlete_name', 'athlete_name_clean', 'nationality_standardized', 'nationality_code',
-                'gender_normalized', 'birth_decade', 'specialization',  # Use gender_normalized
-                'data_quality_score', 'source_system']]
+    # Select final columns
+    final = df_dedup[['athlete_name', 'athlete_name_clean', 'nationality_standardized', 
+                      'nationality_code', 'gender_normalized', 'birth_decade', 'specialization',
+                      'data_quality_score', 'source_system']]
     
     # Rename to match table schema
     final = final.rename(columns={'gender_normalized': 'gender'})
@@ -813,6 +855,15 @@ def reconcile_performances(engine):
     final = df[['athlete_key', 'event_key', 'venue_key', 'weather_key',
                 'competition_date', 'result_value', 'wind_reading', 'position_finish',
                 'data_source', 'data_quality_score', 'created_date']]
+
+    initial_count = len(df)
+    final_new = final.drop_duplicates(subset=[
+    'athlete_key', 'event_key', 'venue_key', 'weather_key', 'competition_date'])
+    new_count = len(final_new)
+    logger.info(f"Filter duplicated performances: {initial_count - new_count} performances removed")
+
+    final = final_new
+            
 
     # Convert data types
     final['athlete_key'] = final['athlete_key'].astype(int)
