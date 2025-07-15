@@ -673,7 +673,9 @@ def load_fact_table(engine):
         venue_dim = pd.read_sql(text("""
             SELECT venue_key, venue_name, city_name, country_code, altitude, climate_zone
             FROM dwh.dim_venue
-            
+            WHERE altitude IS NOT NULL 
+            AND altitude >= 0 
+            AND altitude <= 4000
         """), conn)
         
         # CONDITIONS - Weather

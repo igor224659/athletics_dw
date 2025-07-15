@@ -651,6 +651,9 @@ def reconcile_venues(engine):
         'latitude', 'longitude', 'altitude', 'altitude_category', 
         'climate_zone', 'data_quality_score', 'geographic_source'
     ]]
+
+    # Deletion of venues without altitude (doens't end up well in the fact table)
+    #final_venues = final_venues.dropna(subset=['altitude'])
     
     # Save to database
     with engine.connect() as conn:
