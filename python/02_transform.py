@@ -373,7 +373,7 @@ def chunked_save_to_postgres(df, table_name, engine, schema='staging', chunk_siz
         chunk_end = min(chunk_start + chunk_size, len(df))
         chunk = df.iloc[chunk_start:chunk_end]
         
-        logger.info(f"Saving chunk {i+1}/{total_chunks} ({chunk_start}:{chunk_end})")
+        #logger.info(f"Saving chunk {i+1}/{total_chunks} ({chunk_start}:{chunk_end})")
         
         if_exists_param = 'replace' if i == 0 else 'append'
         
@@ -382,7 +382,7 @@ def chunked_save_to_postgres(df, table_name, engine, schema='staging', chunk_siz
                         if_exists=if_exists_param, index=False, method='multi')
             conn.commit()
     
-    logger.info(f"✓ {table_name} saved successfully")
+    logger.info(f"{table_name} saved successfully")
 
 
 

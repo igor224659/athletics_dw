@@ -5,21 +5,32 @@
 -- 1. DATA COMPLETENESS CHECK
 -- ===========================
 
--- Count records in all tables across 3 layers
-SELECT 'STAGING' as layer, 'raw_world_athletics' as table_name, COUNT(*) as records
-FROM staging.raw_world_athletics
+-- Count performances records in all tables across 3 layers
+-- SELECT 'STAGING' as layer, 'raw_world_athletics' as table_name, COUNT(*) as records
+-- FROM staging.raw_world_athletics
+-- UNION ALL
+-- SELECT 'RECONCILED', 'performances', COUNT(*) FROM reconciled.performances
+-- UNION ALL
+-- SELECT 'STAR SCHEMA', 'fact_performance', COUNT(*) FROM dwh.fact_performance
+
+-- ORDER BY records;
+
+-- Verify data flow across all three layers
+SELECT 
+    'Layer 1 (Staging)' as layer,
+    COUNT(*) as total_records,
+    COUNT(DISTINCT athlete_name) as unique_athletes,
+    COUNT(DISTINCT event_clean) as unique_events
+FROM staging.clean_world_athletics
 UNION ALL
-SELECT 'RECONCILED', 'performances', COUNT(*) FROM reconciled.performances
+SELECT 'Layer 2 (Reconciled)',
+    COUNT(*), COUNT(DISTINCT athlete_key), COUNT(DISTINCT event_key)
+FROM reconciled.performances
 UNION ALL
-SELECT 'STAR SCHEMA', 'fact_performance', COUNT(*) FROM dwh.fact_performance
-UNION ALL
-SELECT 'DIMENSIONS', 'total_dims', 
-    (SELECT COUNT(*) FROM dwh.dim_athlete) + 
-    (SELECT COUNT(*) FROM dwh.dim_event) + 
-    (SELECT COUNT(*) FROM dwh.dim_venue) + 
-    (SELECT COUNT(*) FROM dwh.dim_date) + 
-    (SELECT COUNT(*) FROM dwh.dim_weather)
-ORDER BY layer, table_name;
+SELECT 'Layer 3 (Star Schema)',
+    COUNT(*), COUNT(DISTINCT athlete_key), COUNT(DISTINCT event_key)
+FROM dwh.fact_performance
+ORDER BY layer;
 
 
 -- ===========================
@@ -30,7 +41,7 @@ ORDER BY layer, table_name;
 SELECT 
     'Missing Athletes' as check_type,
     COUNT(*) as failed_records,
-    CASE WHEN COUNT(*) = 0 THEN '✓ PASS' ELSE '✗ FAIL' END as status
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END as status
 FROM dwh.fact_performance f 
 LEFT JOIN dwh.dim_athlete a ON f.athlete_key = a.athlete_key
 WHERE a.athlete_key IS NULL
@@ -38,7 +49,7 @@ WHERE a.athlete_key IS NULL
 UNION ALL
 
 SELECT 'Missing Events', COUNT(*),
-    CASE WHEN COUNT(*) = 0 THEN '✓ PASS' ELSE '✗ FAIL' END
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END
 FROM dwh.fact_performance f 
 LEFT JOIN dwh.dim_event e ON f.event_key = e.event_key
 WHERE e.event_key IS NULL
@@ -46,7 +57,7 @@ WHERE e.event_key IS NULL
 UNION ALL
 
 SELECT 'Missing Venues', COUNT(*),
-    CASE WHEN COUNT(*) = 0 THEN '✓ PASS' ELSE '✗ FAIL' END
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'FAIL' END
 FROM dwh.fact_performance f 
 LEFT JOIN dwh.dim_venue v ON f.venue_key = v.venue_key
 WHERE v.venue_key IS NULL
@@ -105,10 +116,9 @@ JOIN dwh.dim_event e ON f.event_key = e.event_key
 JOIN dwh.dim_venue v ON f.venue_key = v.venue_key
 JOIN dwh.dim_weather w ON f.weather_key = w.weather_key
 JOIN dwh.dim_date d ON f.date_key = d.date_key
-WHERE f.performance_score > 1000  -- Elite performances only
+WHERE f.performance_score > 1000 AND f.performance_score < 1350
 ORDER BY f.performance_score DESC
 LIMIT 10;
-
 
 -- ===========================
 -- 5. BUSINESS LOGIC VALIDATION
@@ -134,32 +144,32 @@ ORDER BY e.event_category, performances DESC;
 -- ===========================
 
 -- Overall data warehouse health check
-SELECT 
-    'DATA WAREHOUSE HEALTH CHECK' as summary_type,
-    'Total Performances' as metric,
-    COUNT(*)::VARCHAR as value,
-    CASE WHEN COUNT(*) > 50000 THEN 'EXCELLENT' ELSE 'GOOD' END as assessment
-FROM dwh.fact_performance
+-- SELECT 
+--     'DATA WAREHOUSE HEALTH CHECK' as summary_type,
+--     'Total Performances' as metric,
+--     COUNT(*)::VARCHAR as value,
+--     CASE WHEN COUNT(*) > 50000 THEN 'EXCELLENT' ELSE 'GOOD' END as assessment
+-- FROM dwh.fact_performance
 
-UNION ALL
+-- UNION ALL
 
-SELECT 'COVERAGE', 'Unique Athletes', 
-    COUNT(DISTINCT athlete_key)::VARCHAR,
-    CASE WHEN COUNT(DISTINCT athlete_key) > 5000 THEN 'EXCELLENT' ELSE 'GOOD' END
-FROM dwh.fact_performance
+-- SELECT 'COVERAGE', 'Unique Athletes', 
+--     COUNT(DISTINCT athlete_key)::VARCHAR,
+--     CASE WHEN COUNT(DISTINCT athlete_key) > 5000 THEN 'EXCELLENT' ELSE 'GOOD' END
+-- FROM dwh.fact_performance
 
-UNION ALL
+-- UNION ALL
 
-SELECT 'COVERAGE', 'Unique Venues',
-    COUNT(DISTINCT venue_key)::VARCHAR,
-    CASE WHEN COUNT(DISTINCT venue_key) > 500 THEN 'EXCELLENT' ELSE 'GOOD' END
-FROM dwh.fact_performance
+-- SELECT 'COVERAGE', 'Unique Venues',
+--     COUNT(DISTINCT venue_key)::VARCHAR,
+--     CASE WHEN COUNT(DISTINCT venue_key) > 500 THEN 'EXCELLENT' ELSE 'GOOD' END
+-- FROM dwh.fact_performance
 
-UNION ALL
+-- UNION ALL
 
-SELECT 'QUALITY', 'Data Quality Score',
-    ROUND(AVG(data_quality_score), 1)::VARCHAR,
-    CASE WHEN AVG(data_quality_score) >= 8 THEN 'EXCELLENT' ELSE 'NEEDS IMPROVEMENT' END
-FROM dwh.fact_performance
+-- SELECT 'QUALITY', 'Data Quality Score',
+--     ROUND(AVG(data_quality_score), 1)::VARCHAR,
+--     CASE WHEN AVG(data_quality_score) >= 8 THEN 'EXCELLENT' ELSE 'NEEDS IMPROVEMENT' END
+-- FROM dwh.fact_performance
 
-ORDER BY summary_type, metric;
+-- ORDER BY summary_type, metric;

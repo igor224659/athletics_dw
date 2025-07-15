@@ -135,7 +135,7 @@ def load_to_staging(engine, world_athletics_df, cities_df, temperature_df):
             method='multi',
             chunksize=10000
         )
-        logger.info("✓ World Athletics data loaded")
+        logger.info("World Athletics data loaded")
         
         logger.info(f"Loading Cities data ({len(cities_df)} rows)...")
         cities_df.to_sql(
@@ -147,7 +147,7 @@ def load_to_staging(engine, world_athletics_df, cities_df, temperature_df):
             method='multi',
             chunksize=25000  
         )
-        logger.info("✓ Cities data loaded")
+        logger.info("Cities data loaded")
         
         logger.info(f"Loading Temperature data ({len(temperature_df)} rows)...")
         temperature_df.to_sql(
@@ -159,7 +159,7 @@ def load_to_staging(engine, world_athletics_df, cities_df, temperature_df):
             method='multi',
             chunksize=25000
         )
-        logger.info("✓ Temperature data loaded")
+        logger.info("Temperature data loaded")
         
         # Verify data loading
         with engine.connect() as conn:
@@ -189,7 +189,7 @@ def main():
         # Load to staging
         load_to_staging(engine, world_athletics_df, cities_df, temperature_df)
         
-        logger.info("Data extraction completed successfully!")
+        logger.info("Data extraction completed successfully")
         
     except Exception as e:
         logger.error(f"Data extraction failed: {e}")

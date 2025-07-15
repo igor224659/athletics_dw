@@ -63,7 +63,7 @@ def reconcile_athletes(engine):
     )
     
     # Keep first occurrence of each normalized name
-    df_dedup = df_sorted.drop_duplicates(subset=['athlete_name_normalized'], keep='first')
+    df_dedup = df_sorted.drop_duplicates(subset=['athlete_name_normalized'], keep='first').copy()
     
     logger.info(f"Deduplication: {len(df)} → {len(df_dedup)} athletes ({len(df) - len(df_dedup)} duplicates removed)")
     
@@ -125,7 +125,7 @@ def reconcile_events(engine):
     logger.info("Filtering out multi-events...")
     initial_count = len(df)
 
-    df = df[~df['event_name'].str.contains('(?i)(decathlon|heptathlon)', na=False)]
+    df = df[~df['event_name'].str.contains('(?i)(?:decathlon|heptathlon)', na=False)]
 
     removed_count = initial_count - len(df)
     logger.info(f"Removed {removed_count} multi-event records")
@@ -404,7 +404,7 @@ def reconcile_weather(engine):
     missing_cities = needed_cities - existing_cities
     
     if missing_cities:
-        logger.info(f"Adding weather estimates for {len(missing_cities)} missing athletics cities: {missing_cities}")
+        #logger.info(f"Adding weather estimates for {len(missing_cities)} missing athletics cities: {missing_cities}")
         
         # Simple climate-based estimates for missing cities
         city_climate_estimates = {
@@ -456,7 +456,7 @@ def reconcile_weather(engine):
         if estimates:
             estimates_df = pd.DataFrame(estimates)
             df = pd.concat([df, estimates_df], ignore_index=True)
-            logger.info(f"Added {len(estimates)} weather estimate records for {len(set(est['venue_name'] for est in estimates))} cities")
+            #logger.info(f"Added {len(estimates)} weather estimate records for {len(set(est['venue_name'] for est in estimates))} cities")
 
     # Select final columns
     final = df[['venue_name', 'month_name', 'temperature',
@@ -479,7 +479,7 @@ def reconcile_venues(engine):
     """
     Reconcile venues with comprehensive city extraction based on actual venue patterns
     """
-    logger.info("Reconciling venues with comprehensive city extraction...")
+    logger.info("Reconciling venues with city extraction...")
     
     def extract_location_from_venue(venue_name):
         """Extract city and country from venue name patterns"""
@@ -725,7 +725,7 @@ def reconcile_performances(engine):
 
 
     # OPTIMIZED WEATHER MATCHING - Vectorized approach
-    logger.info("Creating optimized weather matching lookup tables...")
+    logger.info("Creating weather matching lookup tables...")
     
     # Step 1: Create standardized city names for both datasets
     def standardize_city_name(city):
@@ -816,7 +816,7 @@ def reconcile_performances(engine):
     
     total_matches = (df['weather_key'] != 1).sum()
     logger.info(f"Total weather matching success: {total_matches}/{len(df)} ({total_matches/len(df)*100:.1f}%)")
-    logger.info(f"STEP 5 - After optimized weather join: {len(df)} records")
+    logger.info(f"STEP 5 - After weather join: {len(df)} records")
     
 
     # Remove performances without weather data at reconciled layer
@@ -841,7 +841,7 @@ def reconcile_performances(engine):
 
     # Data quality filtering
     logger.info(f"Before filtering: {len(df)} records")
-    df = df.dropna(subset=['athlete_key', 'event_key'])
+    df = df.dropna(subset=['athlete_key', 'event_key']).copy()
     logger.info(f"After requiring athlete/event IDs: {len(df)} records")
     
     # Fill missing foreign keys with default values
@@ -893,7 +893,7 @@ def reconcile_performances(engine):
 
 def ultra_fast_postgres_append(df, table_name, engine, schema='reconciled'):
     """Ultra-fast append using PostgreSQL COPY - no table recreation"""
-    logger.info(f"Ultra-fast appending {len(df)} records to {schema}.{table_name}...")
+    logger.info(f"Appending {len(df)} records to {schema}.{table_name}...")
     
     # Step 1: Verify table exists
     with engine.connect() as conn:
@@ -924,7 +924,7 @@ def ultra_fast_postgres_append(df, table_name, engine, schema='reconciled'):
             logger.info(f"Executing COPY command for {schema}.{table_name}")
             cursor.copy_expert(copy_sql, output)
             
-            logger.info(f"{len(df)} records appended successfully using COPY!")
+            logger.info(f"{len(df)} records appended successfully")
             
         except Exception as e:
             logger.error(f"COPY failed: {e}")
