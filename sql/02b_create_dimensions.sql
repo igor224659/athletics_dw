@@ -38,8 +38,8 @@ CREATE TABLE dwh.dim_event (
     distance_meters INT,
     measurement_unit VARCHAR(20), -- 'seconds', 'meters'
     gender VARCHAR(10), -- 'Men', 'Women'
-    is_outdoor_event BOOLEAN,
-    world_record DECIMAL(10,3)
+    is_outdoor_event BOOLEAN
+    --world_record DECIMAL(10,3)
 );
 
 -- Athlete Dimension
@@ -48,9 +48,9 @@ CREATE TABLE dwh.dim_athlete (
     athlete_name VARCHAR(100),
     nationality VARCHAR(50),
     nationality_code VARCHAR(3),
-    gender CHAR(1),
-    birth_decade VARCHAR(10), -- '1980s', '1990s'
-    specialization VARCHAR(30) -- 'Sprinter', 'Distance', 'Jumper', 'Thrower'
+    gender CHAR(1)
+    --birth_decade VARCHAR(10), -- '1980s', '1990s'
+    --specialization VARCHAR(30) -- 'Sprinter', 'Distance', 'Jumper', 'Thrower'
 );
 
 

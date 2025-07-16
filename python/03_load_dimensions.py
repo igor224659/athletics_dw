@@ -71,9 +71,9 @@ def load_athlete_dimension(engine):
         athlete_name_clean as athlete_name,
         nationality_standardized as nationality,
         nationality_code,
-        gender,
-        birth_decade,
-        specialization
+        gender
+        --birth_decade,
+        --specialization
     FROM reconciled.athletes
     """
     
@@ -101,8 +101,8 @@ def load_event_dimension(engine):
         distance_meters,
         measurement_unit,
         COALESCE(gender, 'Mixed') as gender,
-        is_outdoor_event,
-        world_record
+        is_outdoor_event
+        --world_record
     FROM reconciled.events
     """
 

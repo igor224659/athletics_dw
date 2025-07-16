@@ -656,7 +656,7 @@ def load_fact_table(engine):
     with engine.connect() as conn:
         # WHO - Athlete
         athlete_dim = pd.read_sql(text("""
-            SELECT athlete_key, athlete_name, nationality_code, gender, specialization
+            SELECT athlete_key, athlete_name, nationality_code, gender
             FROM dwh.dim_athlete
         """), conn)
         
@@ -709,7 +709,7 @@ def load_fact_table(engine):
     
     # WHO - Athlete  
     perf = perf.merge(
-        athlete_dim[['athlete_key', 'athlete_name', 'nationality_code', 'gender', 'specialization']], 
+        athlete_dim[['athlete_key', 'athlete_name', 'nationality_code', 'gender']], 
         on='athlete_key', how='left'
     )
     
