@@ -63,7 +63,7 @@ LIMIT 15;
 -- Which countries excel in athletics?
 
 -- Roll-up: Aggregates from venue level → city level → country level
--- Hierarchy: Venue → City → Country → Continent (stopping at country)
+-- Hierarchy: Venue → City → Country
 
 -- Aggregated Measures:
 -- Total performances per country
