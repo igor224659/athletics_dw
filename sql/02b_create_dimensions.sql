@@ -20,7 +20,7 @@ CREATE TABLE dwh.dim_venue (
     venue_key SERIAL PRIMARY KEY,
     venue_name VARCHAR(100),
     city_name VARCHAR(50),
-    country_name VARCHAR(50),
+    --country_name VARCHAR(50),
     country_code VARCHAR(3),
     latitude DECIMAL(9,6),
     longitude DECIMAL(9,6),
@@ -67,7 +67,7 @@ CREATE TABLE dwh.dim_weather (
 
 -- Create indexes for better performance
 CREATE INDEX idx_venue_city ON dwh.dim_venue(city_name);
-CREATE INDEX idx_venue_country ON dwh.dim_venue(country_name);
+CREATE INDEX idx_venue_country ON dwh.dim_venue(country_code);
 CREATE INDEX idx_venue_altitude ON dwh.dim_venue(altitude_category);
 CREATE INDEX idx_event_name ON dwh.dim_event(event_name);
 CREATE INDEX idx_event_group ON dwh.dim_event(event_group);

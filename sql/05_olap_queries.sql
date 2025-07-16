@@ -73,7 +73,7 @@ LIMIT 15;
 -- Business Value: High-level geographic summary for strategic analysis
 
 SELECT 
-    v.country_name,
+    v.country_code,
     COUNT(*) as total_performances,
     COUNT(DISTINCT f.athlete_key) as unique_athletes,
     COUNT(DISTINCT f.event_key) as events_covered,
@@ -82,8 +82,8 @@ SELECT
     ROUND(AVG(v.altitude), 0) as avg_altitude
 FROM dwh.fact_performance f
 JOIN dwh.dim_venue v ON f.venue_key = v.venue_key
-WHERE v.country_name IS NOT NULL AND v.country_name != 'Unknown'
-GROUP BY v.country_name
+WHERE v.country_code IS NOT NULL AND v.country_code != 'Unknown'
+GROUP BY v.country_code
 HAVING COUNT(*) >= 100  -- Countries with significant data
 ORDER BY avg_performance_score DESC
 LIMIT 20;
@@ -133,7 +133,7 @@ ORDER BY d.decade, e.event_category, avg_score DESC;
 
 SELECT 
     v.venue_name,
-    v.country_name,
+    v.country_code,
     v.altitude_category,
     COUNT(*) as total_performances,
     -- Pivot by event group
@@ -147,7 +147,7 @@ FROM dwh.fact_performance f
 JOIN dwh.dim_venue v ON f.venue_key = v.venue_key
 JOIN dwh.dim_event e ON f.event_key = e.event_key
 WHERE v.venue_name != 'Unknown'
-GROUP BY v.venue_name, v.country_name, v.altitude_category
+GROUP BY v.venue_name, v.country_code, v.altitude_category
 HAVING COUNT(*) >= 50  -- Venues with significant activity
   AND COUNT(DISTINCT e.event_group) >= 2  -- Multi-event venues
 ORDER BY overall_avg DESC

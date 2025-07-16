@@ -415,30 +415,35 @@ def calculate_performance_score_enhanced(result, event_name, measurement_unit, g
         return 500.0
 
 
-# Event categorization for environmental calculations
-EVENT_CATEGORIES = {
-    'Sprint': ['100 Metres', '200 Metres', '300 Metres', '400 Metres', '100 Metres Hurdles', '110 Metres Hurdles', '400 Metres Hurdles'],
-    'Middle Distance': ['600 Metres', '800 Metres', '1000 Metres', '1500 Metres', 'One Mile', 'Two Miles', '3000 Metres', '3000 Metres Steeplechase', '2000 Metres', '2000 Metres Steeplechase'],
-    'Distance': ['5000 Metres', '10000 Metres', 'Marathon', 'Half Marathon', '3000 Metres Race Walk', '5000 Metres Race Walk', '10000 Metres Race Walk', '20000 Metres Race Walk'],
-    'Jumps': ['High Jump', 'Long Jump', 'Triple Jump', 'Pole Vault'],
-    'Throws': ['Shot Put', 'Discus Throw', 'Hammer Throw', 'Javelin Throw']
-}
+# # Event categorization for environmental calculations
+# EVENT_CATEGORIES = {
+#     'Sprint': ['100 Metres', '200 Metres', '300 Metres', '400 Metres', '100 Metres Hurdles', '110 Metres Hurdles', '400 Metres Hurdles'],
+#     'Middle Distance': ['600 Metres', '800 Metres', '1000 Metres', '1500 Metres', 'One Mile', 'Two Miles', '3000 Metres', '3000 Metres Steeplechase', '2000 Metres', '2000 Metres Steeplechase'],
+#     'Distance': ['5000 Metres', '10000 Metres', 'Marathon', 'Half Marathon', '3000 Metres Race Walk', '5000 Metres Race Walk', '10000 Metres Race Walk', '20000 Metres Race Walk'],
+#     'Jumps': ['High Jump', 'Long Jump', 'Triple Jump', 'Pole Vault'],
+#     'Throws': ['Shot Put', 'Discus Throw', 'Hammer Throw', 'Javelin Throw']
+# }
 
 
-def get_event_duration_category(event_name):
-    """Get event category for environmental adjustments"""
-    if pd.isna(event_name):
+def get_event_duration_category(event_group):
+    """Map event groups to duration categories"""
+    if pd.isna(event_group):
         return 'Field'
     
-    event_str = str(event_name).strip()
-    for category, events in EVENT_CATEGORIES.items():
-        if any(event.lower() in event_str.lower() for event in events):
-            return category
-    return 'Field'  # Default
+    # Direct mapping from event_group to duration category
+    mapping = {
+        'Sprint': 'Sprint',
+        'Hurdles': 'Sprint',  # Hurdles behave like sprints
+        'Distance': 'Distance',
+        'Middle Distance': 'Middle Distance',
+        'Jumps': 'Jumps',
+        'Throws': 'Throws'
+    }
+    return mapping.get(event_group, 'Field')
 
 
 
-def calculate_temperature_impact_factor(temperature, event_name):
+def calculate_temperature_impact_factor(temperature, event_group):
     """Calculate temperature impact factor using scientific research"""
     try:
         if pd.isna(temperature):
@@ -449,7 +454,7 @@ def calculate_temperature_impact_factor(temperature, event_name):
         temp_deviation = abs(temperature - optimal_temp)
         
         # FIXED: Use event_name instead of event_category
-        duration_category = get_event_duration_category(event_name)
+        duration_category = get_event_duration_category(event_group)
         
         # Impact rates based on event duration (scientific research)
         if duration_category in ['Sprint', 'Jumps', 'Throws']:
@@ -474,7 +479,7 @@ def calculate_temperature_impact_factor(temperature, event_name):
         return max(0.5, min(1.5, impact_factor))
         
     except Exception as e:
-        logger.warning(f"Error calculating temperature impact for {event_name} at {temperature}°C: {e}")
+        logger.warning(f"Error calculating temperature impact for {event_group} at {temperature}°C: {e}")
         return 1.0
 
 
@@ -547,7 +552,7 @@ def calculate_performance_score(result, event_name, unit):
 
 
 
-def calculate_altitude_adjustment(result, altitude, event_name, measurement_unit):
+def calculate_altitude_adjustment(result, altitude, event_group, measurement_unit):
     """
     Calculate what this performance would be at sea level (300m baseline)
     
@@ -565,7 +570,7 @@ def calculate_altitude_adjustment(result, altitude, event_name, measurement_unit
         if pd.isna(altitude) or altitude <= 300:  # No adjustment below 300m baseline
             return result
         
-        duration_category = get_event_duration_category(event_name)
+        duration_category = get_event_duration_category(event_group)
         altitude_km = (altitude - 300) / 1000.0  # Altitude above 300m baseline
         
         # Scientific altitude effects (research-based coefficients)
@@ -609,7 +614,7 @@ def calculate_altitude_adjustment(result, altitude, event_name, measurement_unit
         return max(0.0, min(999999.0, sea_level_equivalent))
         
     except Exception as e:
-        logger.warning(f"Error calculating altitude adjustment for {event_name}: {e}")
+        logger.warning(f"Error calculating altitude adjustment for {event_group}: {e}")
         return result
     
     
@@ -662,7 +667,7 @@ def load_fact_table(engine):
         
         # WHAT - Event  
         event_dim = pd.read_sql(text("""
-            SELECT event_key, event_name, event_category, measurement_unit, distance_meters
+            SELECT event_key, event_name, event_category, event_group, measurement_unit, distance_meters
             FROM dwh.dim_event  
         """), conn)
         
@@ -715,7 +720,7 @@ def load_fact_table(engine):
     
     # WHAT - Event
     perf = perf.merge(
-        event_dim[['event_key', 'event_name', 'event_category', 'measurement_unit']], 
+        event_dim[['event_key', 'event_name', 'event_category', 'event_group', 'measurement_unit']], 
         on='event_key', how='left'
     )
     
@@ -789,12 +794,12 @@ def load_fact_table(engine):
 
     logger.info("Calculating altitude_adjusted_result")
     perf['altitude_adjusted_result'] = perf.apply(lambda row:
-        calculate_altitude_adjustment(row['result_value'], row['altitude'], row['event_name'], row['measurement_unit']), axis=1)
+        calculate_altitude_adjustment(row['result_value'], row['altitude'], row['event_group'], row['measurement_unit']), axis=1)
 
     # Environmental impact measures
     logger.info("Calculating temperature_impact_factor")
     perf['temperature_impact_factor'] = perf.apply(lambda row:
-        calculate_temperature_impact_factor(row['temperature'], row['event_name']), axis=1)
+        calculate_temperature_impact_factor(row['temperature'], row['event_group']), axis=1)
 
 
     # Step 10: Add performance context flags (simplified without competition logic)

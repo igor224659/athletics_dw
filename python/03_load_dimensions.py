@@ -117,14 +117,14 @@ def load_event_dimension(engine):
 
 def load_venue_dimension(engine):
     """Load venue dimension - matches actual reconciled.venues structure"""
-    logger.info("Loading venue dimension from reconciled.venues...")
+    logger.info("Loading venue dimension from reconciled.venues excluding venues without proper altitude value...")
 
     query = """
     SELECT 
         venue_key,
         venue_name_clean as venue_name,
         city_name,
-        country_name,
+        --country_name,
         country_code,
         latitude,
         longitude,
@@ -132,6 +132,9 @@ def load_venue_dimension(engine):
         altitude_category,
         climate_zone
     FROM reconciled.venues
+    WHERE altitude IS NOT NULL 
+            AND altitude >= 0 
+            AND altitude <= 4000
     """
 
     with engine.connect() as conn:

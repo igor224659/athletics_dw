@@ -554,12 +554,6 @@ def reconcile_venues(engine):
         'LA HABANA': 'HAVANA', 'ZÜRICH': 'ZURICH', 'MÜNCHEN': 'MUNICH',
         'MOSKVA': 'MOSCOW', 'BUCUREŞTI': 'BUCHAREST', 'PRAHA': 'PRAGUE',
         'WARSZAWA': 'WARSAW', 'GÖTEBORG': 'GOTHENBURG', 'KÖLN': 'COLOGNE',
-        #'PALO ALTO': 'SAN FRANCISCO',  # Bay Area
-        #'WALNUT': 'LOS ANGELES',      # LA Area
-        #'TULA': 'MOSCOW',             # Near Moscow
-        #'RIETI': 'ROME',              # Near Rome
-        #'HEUSDEN-ZOLDER': 'BRUSSELS', # Near Brussels
-        #'HENGELO': 'AMSTERDAM'        # Netherlands
     }
     
     # Get all venues from athletics data

@@ -85,7 +85,6 @@ CREATE TABLE reconciled.performances (
 CREATE INDEX idx_reconciled_perf_athlete ON reconciled.performances(athlete_key);
 CREATE INDEX idx_reconciled_perf_event ON reconciled.performances(event_key);
 CREATE INDEX idx_reconciled_perf_venue ON reconciled.performances(venue_key);
---CREATE INDEX idx_reconciled_perf_competition ON reconciled.performances(competition_key);
 CREATE INDEX idx_reconciled_perf_date ON reconciled.performances(competition_date);
 
 COMMENT ON SCHEMA reconciled IS 'Layer 2: Clean, integrated, business-ready data';

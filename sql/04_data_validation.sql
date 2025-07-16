@@ -104,7 +104,7 @@ SELECT
     a.nationality_code,
     e.event_name,
     v.venue_name,
-    v.country_name as venue_country,
+    v.country_code as venue_country,
     v.altitude,
     w.temperature,
     f.result_value,
